@@ -907,7 +907,7 @@ shallow[0].append(99)
 
 print(original)   # [[1, 2, 99], [3, 4]]  ← 原对象也受影响
 print(shallow)    # [[1, 2, 99], [3, 4]]
-
+ 
 # 深拷贝：递归复制嵌套对象
 deep = copy.deepcopy(original)
 deep[1].append(88)
