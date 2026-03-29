@@ -1750,3 +1750,944 @@ int Delete(Array& arr, int index) {
 
 ---
 
+# 阶段三：数组（Array）— 完整教程（中篇：第11~17章）
+
+---
+
+## 第十一章：线性搜索
+
+### 11.1 基本线性搜索
+
+从头到尾逐个检查，找到目标返回索引。
+
+```cpp
+int LinearSearch(const Array& arr, int key) {
+    for (int i = 0; i < arr.length; i++) {
+        if (arr.A[i] == key)
+            return i;
+    }
+    return -1; // 未找到
+}
+```
+
+| 场景                     | 复杂度 |
+| ------------------------ | ------ |
+| 最好（第一个就是）       | O(1)   |
+| 最坏（最后一个或不存在） | O(n)   |
+| 平均                     | O(n)   |
+
+### 11.2 改进：交换法（Transposition）
+
+找到元素后，与**前一个元素**交换。多次搜索后，高频元素逐步前移。
+
+```cpp
+int LinearSearchTransposition(Array& arr, int key) {
+    for (int i = 0; i < arr.length; i++) {
+        if (arr.A[i] == key) {
+            if (i > 0) {
+                std::swap(arr.A[i], arr.A[i - 1]);
+                return i - 1;
+            }
+            return 0;
+        }
+    }
+    return -1;
+}
+```
+
+```
+搜索 8:  [2, 4, 6, 8, 10]  → 找到 index=3
+交换后:  [2, 4, 8, 6, 10]     8 前移了一步
+再搜 8:  [2, 4, 8, 6, 10]  → 找到 index=2
+交换后:  [2, 8, 4, 6, 10]     8 又前移一步
+```
+
+**优点**：渐进式，稳定  **缺点**：需多次搜索才能移到前面
+
+### 11.3 改进：前移法（Move to Front）
+
+找到元素后，直接与**第一个元素**交换，一步到位。
+
+```cpp
+int LinearSearchMoveToFront(Array& arr, int key) {
+    for (int i = 0; i < arr.length; i++) {
+        if (arr.A[i] == key) {
+            if (i > 0) {
+                std::swap(arr.A[i], arr.A[0]);
+                return 0;
+            }
+            return 0;
+        }
+    }
+    return -1;
+}
+```
+
+**优点**：一步到位  **缺点**：不同元素交替搜索时频繁交换反而降低性能
+
+---
+
+## 第十二章：二分查找
+
+### 12.1 前提
+
+**二分查找只能用于已排序的数组！**
+
+### 12.2 核心思想
+
+每次与中间元素比较，根据结果将搜索范围缩小一半。
+
+```
+在 [3, 6, 8, 12, 14, 17, 25, 29, 31, 36, 42, 53] 中查找 14
+
+轮1: low=0, high=11, mid=5 → A[5]=17, 14<17 → high=4
+轮2: low=0, high=4,  mid=2 → A[2]=8,  14>8  → low=3
+轮3: low=3, high=4,  mid=3 → A[3]=12, 14>12 → low=4
+轮4: low=4, high=4,  mid=4 → A[4]=14 → 找到！
+```
+
+### 12.3 迭代实现
+
+```cpp
+int BinarySearch(const Array& arr, int key) {
+    int low = 0, high = arr.length - 1;
+
+    while (low <= high) {
+        int mid = low + (high - low) / 2; // 防溢出写法！
+        if (arr.A[mid] == key)
+            return mid;
+        else if (key < arr.A[mid])
+            high = mid - 1;
+        else
+            low = mid + 1;
+    }
+    return -1;
+}
+```
+
+> **关键细节**：用 `low + (high - low) / 2` 而非 `(low + high) / 2`，避免 `low + high` 溢出 int 范围。
+
+### 12.4 递归实现
+
+```cpp
+int BinarySearchRec(const int A[], int low, int high, int key) {
+    if (low > high) return -1;
+    int mid = low + (high - low) / 2;
+    if (A[mid] == key) return mid;
+    else if (key < A[mid]) return BinarySearchRec(A, low, mid - 1, key);
+    else return BinarySearchRec(A, mid + 1, high, key);
+}
+```
+
+### 12.5 复杂度分析
+
+每轮范围减半：n → n/2 → n/4 → ... → 1，共 log₂n 轮。
+
+| 场景      | 时间         | 空间                      |
+| --------- | ------------ | ------------------------- |
+| 最好      | O(1)         | —                         |
+| 最坏/平均 | **O(log n)** | 迭代 O(1) / 递归 O(log n) |
+
+### 12.6 平均情况精确分析
+
+画出二分查找树（以 n=15 为例）：
+
+```
+层1 (1次比较):              [7]              → 1个节点
+层2 (2次比较):        [3]        [11]        → 2个节点
+层3 (3次比较):     [1]  [5]   [9]  [13]     → 4个节点
+层4 (4次比较):   [0][2][4][6][8][10][12][14] → 8个节点
+```
+
+$$\text{平均比较次数} = \frac{1{\times}1 + 2{\times}2 + 3{\times}4 + 4{\times}8}{15} = \frac{49}{15} \approx 3.27$$
+
+一般化（n = 2^k - 1）：平均 ≈ log₂n - 1，仍为 **O(log n)**。
+
+### 12.7 对比总结
+
+|                      | 线性搜索     | 二分查找 |
+| -------------------- | ------------ | -------- |
+| 前提                 | 无需排序     | 必须有序 |
+| 最坏时间             | O(n)         | O(log n) |
+| n=1,000,000 最坏比较 | 1,000,000 次 | ~20 次   |
+
+---
+
+## 第十三章：Get、Set、Max、Min、Sum、Avg
+
+```cpp
+int Get(const Array& arr, int index) {
+    if (index >= 0 && index < arr.length) return arr.A[index];
+    return -1; // 实际工程用 std::optional
+}
+
+void Set(Array& arr, int index, int x) {
+    if (index >= 0 && index < arr.length) arr.A[index] = x;
+}
+
+int Max(const Array& arr) {
+    int m = arr.A[0];
+    for (int i = 1; i < arr.length; i++)
+        if (arr.A[i] > m) m = arr.A[i];
+    return m;
+}
+
+int Min(const Array& arr) {
+    int m = arr.A[0];
+    for (int i = 1; i < arr.length; i++)
+        if (arr.A[i] < m) m = arr.A[i];
+    return m;
+}
+
+int Sum(const Array& arr) {
+    int s = 0;
+    for (int i = 0; i < arr.length; i++) s += arr.A[i];
+    return s;
+}
+
+double Avg(const Array& arr) {
+    return static_cast<double>(Sum(arr)) / arr.length;
+}
+```
+
+| 操作                  | 复杂度                  |
+| --------------------- | ----------------------- |
+| Get / Set             | **O(1)** — 数组核心优势 |
+| Max / Min / Sum / Avg | **O(n)** — 需完整遍历   |
+
+---
+
+## 第十四章：反转与移动操作
+
+### 14.1 反转（双指针原地法）
+
+```cpp
+void Reverse(Array& arr) {
+    int left = 0, right = arr.length - 1;
+    while (left < right) {
+        std::swap(arr.A[left], arr.A[right]);
+        left++;
+        right--;
+    }
+}
+```
+
+```
+[2, 3, 5, 8, 10]
+ L→            ←R   交换 2↔10 → [10, 3, 5, 8, 2]
+    L→      ←R      交换 3↔8  → [10, 8, 5, 3, 2]
+       L=R          结束
+```
+
+时间 O(n)，空间 **O(1)** ✓
+
+### 14.2 左移（Shift Left）
+
+所有元素左移一位，首元素丢失，末尾补零。
+
+```cpp
+void ShiftLeft(Array& arr) {
+    for (int i = 0; i < arr.length - 1; i++)
+        arr.A[i] = arr.A[i + 1];
+    arr.A[arr.length - 1] = 0;
+}
+// [2, 4, 6, 8, 10] → [4, 6, 8, 10, 0]
+```
+
+### 14.3 左旋转（Rotate Left）
+
+首元素不丢失，移到末尾（循环）。
+
+```cpp
+void RotateLeft(Array& arr) {
+    int first = arr.A[0];
+    for (int i = 0; i < arr.length - 1; i++)
+        arr.A[i] = arr.A[i + 1];
+    arr.A[arr.length - 1] = first;
+}
+// [2, 4, 6, 8, 10] → [4, 6, 8, 10, 2]
+```
+
+右移/右旋转方向相反，逻辑类似。
+
+---
+
+## 第十五章：检查数组是否有序
+
+```cpp
+bool IsSorted(const Array& arr) {
+    for (int i = 0; i < arr.length - 1; i++)
+        if (arr.A[i] > arr.A[i + 1])
+            return false;
+    return true;
+}
+```
+
+**有序数组的插入优化**——保持有序性的插入（插入排序思想）：
+
+```cpp
+void InsertSorted(Array& arr, int x) {
+    if (arr.length >= arr.size) return;
+    int i = arr.length - 1;
+    while (i >= 0 && arr.A[i] > x) {
+        arr.A[i + 1] = arr.A[i]; // 大于 x 的元素后移
+        i--;
+    }
+    arr.A[i + 1] = x;
+    arr.length++;
+}
+// [3, 7, 12, 18, 25] 插入 10 → [3, 7, 10, 12, 18, 25]
+```
+
+---
+
+## 第十六章：合并两个有序数组
+
+### 16.1 思路
+
+双指针分别遍历两个有序数组，每次取较小者放入结果。
+
+```
+A = [2, 6, 10, 15, 25]     i→
+B = [3, 4, 7, 18, 20]      j→
+C = []                      k→
+
+比较 2 vs 3 → C=[2], i++
+比较 6 vs 3 → C=[2,3], j++
+比较 6 vs 4 → C=[2,3,4], j++
+比较 6 vs 7 → C=[2,3,4,6], i++
+...
+C = [2, 3, 4, 6, 7, 10, 15, 18, 20, 25]
+```
+
+### 16.2 实现
+
+```cpp
+Array Merge(const Array& a, const Array& b) {
+    Array c;
+    c.size = a.length + b.length;
+    c.A = new int[c.size];
+    int i = 0, j = 0, k = 0;
+
+    while (i < a.length && j < b.length) {
+        if (a.A[i] < b.A[j])
+            c.A[k++] = a.A[i++];
+        else
+            c.A[k++] = b.A[j++];
+    }
+    while (i < a.length) c.A[k++] = a.A[i++];
+    while (j < b.length) c.A[k++] = b.A[j++];
+
+    c.length = k;
+    return c;
+}
+```
+
+**时间**：O(m+n)　**空间**：O(m+n)
+
+> **核心洞察**：这是**归并排序（Merge Sort）** 的核心步骤。
+
+---
+
+## 第十七章：集合操作（并集、交集、差集）
+
+三种操作结构几乎相同——双指针遍历两个有序数组，区别仅在于**何时放入结果**。
+
+### 17.1 并集（Union）
+
+A∪B = 所有不重复元素。
+
+```
+A = [2, 5, 6, 10, 15]    B = [3, 5, 7, 10, 18]
+A∪B = [2, 3, 5, 6, 7, 10, 15, 18]
+```
+
+```cpp
+Array Union(const Array& a, const Array& b) {
+    Array c; c.size = a.length + b.length;
+    c.A = new int[c.size];
+    int i = 0, j = 0, k = 0;
+
+    while (i < a.length && j < b.length) {
+        if (a.A[i] < b.A[j])       c.A[k++] = a.A[i++];
+        else if (a.A[i] > b.A[j])  c.A[k++] = b.A[j++];
+        else { c.A[k++] = a.A[i++]; j++; } // 相等只放一次
+    }
+    while (i < a.length) c.A[k++] = a.A[i++];
+    while (j < b.length) c.A[k++] = b.A[j++];
+    c.length = k;
+    return c;
+}
+```
+
+### 17.2 交集（Intersection）
+
+A∩B = 两者都有的元素。
+
+```
+A∩B = [5, 10]
+```
+
+```cpp
+Array Intersection(const Array& a, const Array& b) {
+    Array c; c.size = std::min(a.length, b.length);
+    c.A = new int[c.size];
+    int i = 0, j = 0, k = 0;
+
+    while (i < a.length && j < b.length) {
+        if (a.A[i] < b.A[j])       i++;      // A 小，A 前进
+        else if (a.A[i] > b.A[j])  j++;      // B 小，B 前进
+        else { c.A[k++] = a.A[i++]; j++; }   // 相等放入
+    }
+    c.length = k;
+    return c;
+}
+```
+
+### 17.3 差集（Difference）
+
+A-B = 在 A 中但不在 B 中的元素。
+
+```
+A-B = [2, 6, 15]
+```
+
+```cpp
+Array Difference(const Array& a, const Array& b) {
+    Array c; c.size = a.length;
+    c.A = new int[c.size];
+    int i = 0, j = 0, k = 0;
+
+    while (i < a.length && j < b.length) {
+        if (a.A[i] < b.A[j])       c.A[k++] = a.A[i++]; // A独有→放入
+        else if (a.A[i] > b.A[j])  j++;                   // B独有→跳过
+        else { i++; j++; }                                 // 相等→都跳过
+    }
+    while (i < a.length) c.A[k++] = a.A[i++]; // A剩余都是独有
+    c.length = k;
+    return c;
+}
+```
+
+### 17.4 三种操作的统一模式
+
+| 情况         | 并集          | 交集     | 差集(A-B)     |
+| ------------ | ------------- | -------- | ------------- |
+| A[i] < B[j]  | **放入** A[i] | 跳过 A   | **放入** A[i] |
+| A[i] > B[j]  | **放入** B[j] | 跳过 B   | 跳过 B        |
+| A[i] == B[j] | 放入**一次**  | **放入** | **都跳过**    |
+| A 有剩余     | 全部放入      | 不管     | 全部放入      |
+| B 有剩余     | 全部放入      | 不管     | 不管          |
+
+三种操作的时间复杂度都是 **O(m+n)**。
+
+---
+
+# 阶段三：数组（Array）— 完整教程（下篇：可选强化挑战）
+
+---
+
+## 第十八章：查找单个缺失元素（P99）
+
+### 18.1 问题描述
+
+给定一个从 1 到 n 的**连续自然数**序列，其中恰好**缺少一个**数字，存储在一个长度为 n-1 的数组中。找出缺失的那个数字。
+
+```
+输入: [1, 2, 3, 4, 6, 7, 8, 9, 10]   （缺了 5）
+输出: 5
+```
+
+### 18.2 方法一：求和公式法
+
+1~n 的总和公式：$S = \frac{n(n+1)}{2}$
+
+用公式总和减去数组实际总和，差值就是缺失的数。
+
+```cpp
+int FindMissing(const int A[], int length, int n) {
+    int expectedSum = n * (n + 1) / 2;
+    int actualSum = 0;
+    for (int i = 0; i < length; i++)
+        actualSum += A[i];
+    return expectedSum - actualSum;
+}
+```
+
+```
+n = 10, expectedSum = 55
+actualSum = 1+2+3+4+6+7+8+9+10 = 50
+缺失 = 55 - 50 = 5 ✓
+```
+
+**时间 O(n)，空间 O(1)**。
+
+> **注意**：当 n 很大时，`n*(n+1)/2` 可能溢出 `int`。实际工程中可用 `long long`，或采用下面的方法。
+
+### 18.3 方法二：逐项差值法
+
+因为数组是有序的（1, 2, 3, ..., 缺一个, ..., n），我们可以检查 `A[i]` 是否等于 `i+1`（如果从 1 开始）。
+
+```cpp
+int FindMissing_v2(const int A[], int length) {
+    for (int i = 0; i < length; i++) {
+        if (A[i] != i + 1)
+            return i + 1; // 这个位置应该是 i+1，但不是
+    }
+    return length + 1; // 缺的是最后一个数
+}
+```
+
+**时间 O(n)，空间 O(1)**。
+
+---
+
+## 第十九章：查找多个缺失元素（P100~P101）
+
+### 19.1 问题描述
+
+数组来自 1~n 的自然数序列，但可能缺少**多个**数字。找出所有缺失的数字。
+
+```
+输入: [1, 3, 4, 7, 9, 10]    n=10
+缺失: 2, 5, 6, 8
+```
+
+### 19.2 方法一：逐项对比法（数组已排序）
+
+依次检查：数组中第 i 个位置的值是否等于期望值。
+
+```cpp
+void FindMultipleMissing_Sorted(const int A[], int length, int n) {
+    int expected = 1; // 期望的下一个数
+    int i = 0;
+
+    while (expected <= n) {
+        if (i < length && A[i] == expected) {
+            i++; // 匹配，继续
+        } else {
+            std::cout << expected << " "; // 缺失！
+        }
+        expected++;
+    }
+}
+```
+
+```
+A = [1, 3, 4, 7, 9, 10], n=10
+
+expected=1: A[0]=1 ✓, i=1
+expected=2: A[1]=3 ≠ 2, 输出 2
+expected=3: A[1]=3 ✓, i=2
+expected=4: A[2]=4 ✓, i=3
+expected=5: A[3]=7 ≠ 5, 输出 5
+expected=6: A[3]=7 ≠ 6, 输出 6
+expected=7: A[3]=7 ✓, i=4
+expected=8: A[4]=9 ≠ 8, 输出 8
+expected=9: A[4]=9 ✓, i=5
+expected=10: A[5]=10 ✓, i=6
+输出: 2 5 6 8 ✓
+```
+
+**时间 O(n)，空间 O(1)**。
+
+### 19.3 方法二：哈希表法（数组无序或无序也需要处理）
+
+当数组**无序**时，无法用上面的方法。使用哈希表（或布尔数组）标记出现过的数字。
+
+```cpp
+#include <unordered_set>
+
+void FindMultipleMissing_Unsorted(const int A[], int length, int n) {
+    std::unordered_set<int> present(A, A + length);
+
+    for (int i = 1; i <= n; i++) {
+        if (present.find(i) == present.end())
+            std::cout << i << " ";
+    }
+}
+```
+
+或者用更高效的布尔数组：
+
+```cpp
+void FindMultipleMissing_BitArray(const int A[], int length, int n) {
+    // 用 vector<bool> 作为位标记（也可用 new bool[n+1]）
+    std::vector<bool> seen(n + 1, false);
+
+    for (int i = 0; i < length; i++)
+        seen[A[i]] = true;
+
+    for (int i = 1; i <= n; i++)
+        if (!seen[i])
+            std::cout << i << " ";
+}
+```
+
+**时间 O(n)，空间 O(n)**。
+
+> **取舍**：有序数组用方法一（O(1) 空间），无序数组用方法二（O(n) 空间）。
+
+---
+
+## 第二十章：在有序数组中查找重复项（P102~P103）
+
+### 20.1 基础版：找出所有重复元素
+
+有序数组中，重复元素一定相邻。
+
+```cpp
+void FindDuplicates_Sorted(const int A[], int length) {
+    for (int i = 0; i < length - 1; i++) {
+        if (A[i] == A[i + 1]) {
+            int val = A[i];
+            int count = 1;
+            // 统计连续相同元素的个数
+            while (i < length - 1 && A[i] == A[i + 1]) {
+                count++;
+                i++;
+            }
+            std::cout << val << " 出现了 " << count << " 次\n";
+        }
+    }
+}
+```
+
+```
+A = [2, 3, 3, 5, 5, 5, 8, 10, 10]
+输出:
+3 出现了 2 次
+5 出现了 3 次
+10 出现了 2 次
+```
+
+**时间 O(n)，空间 O(1)**。
+
+### 20.2 进阶版：利用索引差值
+
+如果数组元素来自 1~n 的范围且已排序，可以利用一个性质：**如果没有重复，`A[i]` 应等于 `i + 起始值偏移`**。当 `A[i] == A[i-1]` 时，说明该值重复。
+
+另一种更巧妙的方式——对于连续整数序列，如果 `A[i] - A[i-1] == 0`，则重复；如果  `A[i] - A[i-1] > 1`，则中间有缺失：
+
+```cpp
+void AnalyzeSortedArray(const int A[], int length) {
+    int lastSeen = A[0];
+    for (int i = 1; i < length; i++) {
+        int diff = A[i] - A[i - 1];
+        if (diff == 0) {
+            std::cout << A[i] << " 重复\n";
+        } else if (diff > 1) {
+            // 中间缺失了 diff-1 个数
+            for (int j = A[i - 1] + 1; j < A[i]; j++)
+                std::cout << j << " 缺失\n";
+        }
+    }
+}
+```
+
+---
+
+## 第二十一章：在无序数组中查找重复项（P104）
+
+### 21.1 问题描述
+
+数组无序，找出所有重复元素及其出现次数。
+
+### 21.2 方法一：暴力双循环（不推荐）
+
+```cpp
+// 时间 O(n²)，空间 O(1)
+void FindDup_Brute(const int A[], int length) {
+    for (int i = 0; i < length; i++) {
+        int count = 1;
+        if (A[i] == -1) continue; // 已处理过的标记
+        for (int j = i + 1; j < length; j++) {
+            if (A[i] == A[j]) {
+                count++;
+                // 注意：这里修改了数组，仅适用于非 const 场景
+            }
+        }
+        if (count > 1)
+            std::cout << A[i] << " 出现了 " << count << " 次\n";
+    }
+}
+```
+
+### 21.3 方法二：哈希表（推荐）
+
+```cpp
+#include <unordered_map>
+
+void FindDup_Hash(const int A[], int length) {
+    std::unordered_map<int, int> freq;
+
+    for (int i = 0; i < length; i++)
+        freq[A[i]]++;
+
+    for (const auto& [val, count] : freq) {
+        if (count > 1)
+            std::cout << val << " 出现了 " << count << " 次\n";
+    }
+}
+```
+
+**时间 O(n)，空间 O(n)**。
+
+### 21.4 方法三：计数数组法（元素范围已知时最优）
+
+如果元素值在 `0 ~ maxVal` 范围内，可以用计数数组：
+
+```cpp
+void FindDup_Counting(const int A[], int length, int maxVal) {
+    int* count = new int[maxVal + 1]{}; // 零初始化
+
+    for (int i = 0; i < length; i++)
+        count[A[i]]++;
+
+    for (int i = 0; i <= maxVal; i++)
+        if (count[i] > 1)
+            std::cout << i << " 出现了 " << count[i] << " 次\n";
+
+    delete[] count;
+}
+```
+
+```
+A = [8, 3, 6, 4, 6, 5, 6, 8, 2, 7]  maxVal=8
+count: [0,0,1,1,1,1,3,1,2]
+          索引: 0 1 2 3 4 5 6 7 8
+输出: 6 出现了 3 次, 8 出现了 2 次
+```
+
+**时间 O(n+maxVal)，空间 O(maxVal)**。
+
+---
+
+## 第二十二章：查找满足条件的元素对（P105~P106）
+
+### 22.1 问题描述
+
+给定数组和目标值 `target`，找出所有满足 `A[i] + A[j] == target` 的元素对。
+
+```
+A = [1, 3, 4, 5, 6, 8, 9, 10, 12, 14]   target = 10
+元素对: (1,9), (4,6)
+```
+
+### 22.2 方法一：暴力法（无序数组）
+
+```cpp
+void FindPairs_Brute(const int A[], int length, int target) {
+    for (int i = 0; i < length - 1; i++)
+        for (int j = i + 1; j < length; j++)
+            if (A[i] + A[j] == target)
+                std::cout << "(" << A[i] << ", " << A[j] << ")\n";
+}
+```
+
+**时间 O(n²)**。
+
+### 22.3 方法二：哈希集合法（无序数组，推荐）
+
+```cpp
+#include <unordered_set>
+
+void FindPairs_Hash(const int A[], int length, int target) {
+    std::unordered_set<int> seen;
+
+    for (int i = 0; i < length; i++) {
+        int complement = target - A[i];
+        if (seen.count(complement))
+            std::cout << "(" << complement << ", " << A[i] << ")\n";
+        seen.insert(A[i]);
+    }
+}
+```
+
+**原理**：遍历数组，对每个元素 `x`，检查 `target - x` 是否已经在集合中。
+
+```
+target = 10, A = [1, 3, 4, 5, 6, 8, 9, 10, 12, 14]
+
+i=0: x=1,  comp=9,  seen={} → 无          seen={1}
+i=1: x=3,  comp=7,  seen={1} → 无         seen={1,3}
+i=2: x=4,  comp=6,  seen={1,3} → 无       seen={1,3,4}
+i=3: x=5,  comp=5,  seen={1,3,4} → 无     seen={1,3,4,5}
+i=4: x=6,  comp=4,  seen 中有 4! → 输出 (4,6)
+i=6: x=9,  comp=1,  seen 中有 1! → 输出 (1,9)
+...
+```
+
+**时间 O(n)，空间 O(n)**。
+
+### 22.4 方法三：双指针法（有序数组，最优）
+
+```cpp
+void FindPairs_TwoPointers(const int A[], int length, int target) {
+    int left = 0, right = length - 1;
+
+    while (left < right) {
+        int sum = A[left] + A[right];
+        if (sum == target) {
+            std::cout << "(" << A[left] << ", " << A[right] << ")\n";
+            left++;
+            right--;
+        } else if (sum < target) {
+            left++;   // 和太小，左指针右移增大
+        } else {
+            right--;  // 和太大，右指针左移减小
+        }
+    }
+}
+```
+
+```
+A = [1, 3, 4, 5, 6, 8, 9, 10, 12, 14]  target=10
+     L→                              ←R
+
+1+14=15 > 10 → R--
+1+12=13 > 10 → R--
+1+10=11 > 10 → R--
+1+9=10 == 10 → 输出 (1,9), L++, R--
+3+8=11 > 10 → R--
+3+6=9 < 10 → L++
+4+6=10 == 10 → 输出 (4,6), L++, R--
+5=5, L>=R → 结束
+```
+
+**时间 O(n)，空间 O(1)** ✓ 最优。但要求数组已排序。
+
+---
+
+## 第二十三章：单次遍历查找最大值和最小值（P107）
+
+### 23.1 问题描述
+
+在一次遍历中同时找出数组的最大值和最小值。
+
+### 23.2 朴素方法（两次遍历）
+
+```cpp
+int max = Max(arr); // O(n)
+int min = Min(arr); // O(n)
+// 总共 2(n-1) 次比较
+```
+
+### 23.3 优化：单次遍历
+
+```cpp
+void FindMaxMin(const int A[], int length, int& outMax, int& outMin) {
+    if (length == 0) return;
+
+    outMax = outMin = A[0];
+
+    for (int i = 1; i < length; i++) {
+        if (A[i] > outMax)
+            outMax = A[i];
+        else if (A[i] < outMin) // 注意用 else if！
+            outMin = A[i];
+    }
+}
+```
+
+**关键优化**：使用 `else if` 而非两个独立 `if`。如果元素比 max 还大，它不可能是 min，无需再比。
+
+- 最好情况（升序）：n-1 次比较
+- 最坏情况（降序）：2(n-1) 次比较
+- 平均：约 1.5(n-1) 次比较
+
+### 23.4 进阶：成对比较法
+
+更高效的方法——每次取两个元素，先互相比较，再分别与 max/min 比较。每对只需 3 次比较（而非 4 次）。
+
+```cpp
+void FindMaxMin_Pairs(const int A[], int length, int& outMax, int& outMin) {
+    int i;
+    // 初始化
+    if (length % 2 == 0) {
+        // 偶数个：先比较前两个
+        if (A[0] > A[1]) { outMax = A[0]; outMin = A[1]; }
+        else             { outMax = A[1]; outMin = A[0]; }
+        i = 2;
+    } else {
+        // 奇数个：第一个既是 max 也是 min
+        outMax = outMin = A[0];
+        i = 1;
+    }
+
+    // 每次处理两个元素
+    for (; i < length - 1; i += 2) {
+        int bigger, smaller;
+        if (A[i] > A[i + 1]) {       // 1 次比较
+            bigger = A[i];
+            smaller = A[i + 1];
+        } else {
+            bigger = A[i + 1];
+            smaller = A[i];
+        }
+        if (bigger > outMax)  outMax = bigger;   // 1 次比较
+        if (smaller < outMin) outMin = smaller;  // 1 次比较
+    }
+    // 每对 3 次比较，共 ⌈3n/2⌉ - 2 次比较，是理论最优
+}
+```
+
+```
+A = [3, 8, 1, 9, 2, 7]
+
+初始化（偶数）：比较 3 vs 8 → max=8, min=3
+
+第一对 (1, 9)：1 vs 9 → smaller=1, bigger=9
+    9 > 8 → max=9;  1 < 3 → min=1
+
+第二对 (2, 7)：2 vs 7 → smaller=2, bigger=7
+    7 < 9 → 不变;   2 > 1 → 不变
+
+结果: max=9, min=1 ✓
+总比较次数: 1 + 3 + 3 = 7 次（而非朴素法的 10 次）
+```
+
+**比较次数**：$\lceil 3n/2 \rceil - 2$，这是**理论最优**，不可能用更少的比较次数同时找到最大和最小值。
+
+---
+
+## 知识总结
+
+### 各操作复杂度速查表
+
+| 操作                     | 时间复杂度         | 空间复杂度 |
+| ------------------------ | ------------------ | ---------- |
+| 随机访问 Get/Set         | O(1)               | O(1)       |
+| 末尾插入 Append          | O(1)               | O(1)       |
+| 任意位置插入 Insert      | O(n)               | O(1)       |
+| 任意位置删除 Delete      | O(n)               | O(1)       |
+| 线性搜索                 | O(n)               | O(1)       |
+| 二分查找（已排序）       | O(log n)           | O(1)       |
+| Max / Min / Sum          | O(n)               | O(1)       |
+| 反转 Reverse（双指针）   | O(n)               | O(1)       |
+| 检查有序                 | O(n)               | O(1)       |
+| 合并两个有序数组         | O(m+n)             | O(m+n)     |
+| 集合操作（有序）         | O(m+n)             | O(m+n)     |
+| 动态扩容（一次）         | O(n)               | O(n)       |
+| 查找缺失元素（求和法）   | O(n)               | O(1)       |
+| 查找重复（哈希法）       | O(n)               | O(n)       |
+| 元素对（双指针，有序）   | O(n)               | O(1)       |
+| 同时求 Max+Min（成对法） | O(n)，~1.5n 次比较 | O(1)       |
+
+### 数组的优缺点总结
+
+| 优点               | 缺点                     |
+| ------------------ | ------------------------ |
+| O(1) 随机访问      | 插入/删除需移动元素 O(n) |
+| 内存连续，缓存友好 | 大小固定，扩容代价高     |
+| 实现简单           | 空间可能浪费（预分配）   |
+
+> **核心认识**：数组擅长**读取**（O(1) 随机访问），不擅长**修改结构**（插入/删除 O(n)）。当需要频繁插入删除时，应考虑**链表**——这正是下一阶段要学习的内容。
+
+---
+
+**全部教程完成！** 三篇内容覆盖了数组从基础概念到高级挑战的全部知识点：
+
+- **上篇（第1~10章）**：基础概念、声明、静态/动态、扩容、二维数组、地址公式、ADT、插入删除
+- **中篇（第11~17章）**：线性搜索、二分查找、基础函数、反转移动、有序检测、合并、集合操作
+- **下篇（第18~23章）**：缺失元素、重复元素、元素对查找、同时求最大最小值
