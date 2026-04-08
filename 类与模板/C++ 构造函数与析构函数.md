@@ -259,7 +259,7 @@ public:
     Person(string n, int a) {           // 双参数构造
         name = n; 
         age = a; 
-    }
+    }l
 };
 ```
 

@@ -36,6 +36,9 @@
 
 这个规律将在后续的大小写转换中发挥核心作用。
 
+> ⚠️ **适用范围提醒**
+> 本章后续很多算法都默认输入属于 **ASCII/英文字符集**。像“大小写差 32”“`count[128]` 计数数组”“位运算追踪字母”这些技巧，都是建立在**一个字符对应一个字节且编码连续**的前提上。对于 UTF-8 中文文本，一个汉字通常会占多个字节，不能把 `char` 的单个字节直接当作“一个完整字符”处理。
+
 ```cpp
 #include <iostream>
 using namespace std;
@@ -113,14 +116,14 @@ cout << s3.length() << endl;  // 输出: 11
 
 #### 两种方式的对比
 
-| 特性             | C 风格 `char[]`     | C++ `string`       |
-| ---------------- | ------------------- | ------------------ |
-| 需要手动管理内存 | ✅ 是                | ❌ 否（自动管理）   |
-| 可以动态增长     | ❌ 否                | ✅ 是               |
-| 以 `\0` 结尾     | ✅ 必须              | 内部自动处理       |
-| 支持 `+` 拼接    | ❌ 否（需 `strcat`） | ✅ 是               |
-| 性能             | 略高                | 略低（有额外开销） |
-| 学习数据结构推荐 | ✅ **推荐使用**      | 辅助使用           |
+| 特性             | C 风格 `char[]`            | C++ `string`               |
+| ---------------- | -------------------------- | -------------------------- |
+| 需要手动管理内存 | ✅ 是                       | ❌ 否（自动管理）           |
+| 可以动态增长     | ❌ 否                       | ✅ 是                       |
+| 以 `\0` 结尾     | ✅ 必须                     | 内部自动处理               |
+| 支持 `+` 拼接    | ❌ 否（需 `strcat`）        | ✅ 是                       |
+| 性能             | 常数开销通常较小，但易出错 | 常数开销略高，但更安全易用 |
+| 学习数据结构推荐 | ✅ **推荐使用**             | 辅助使用                   |
 
 > 📌 **本教程的选择：** 在数据结构的学习中，我们**主要使用 C 风格字符串（字符数组）**，因为它能让你直接接触底层的内存操作和算法细节。理解了底层原理后，使用 `std::string` 将会得心应手。
 
@@ -155,6 +158,8 @@ int main() {
 }
 ```
 
+> 📌 `cin.getline(name, 50)` 最多读取 **49 个可见字符**，最后一个位置必须留给 `\0`。这正是 C 风格字符串处理中“**长度**”与“**容量**”必须区分开的典型例子。
+
 ---
 
 ## 第二章：计算字符串长度（P109）
@@ -176,6 +181,7 @@ int main() {
 
 ```cpp
 #include <iostream>
+#include <cstring>
 using namespace std;
 
 // 方法一：使用 while 循环
@@ -256,6 +262,8 @@ int main() {
 因此：
 - **大写 → 小写：** 字符 + 32
 - **小写 → 大写：** 字符 - 32
+
+> ⚠️ 上面的 `±32` 规律只对 **ASCII 英文字母** 成立。它并不适用于中文，也不适用于所有国际化字符集。
 
 ### 3.2 实现代码
 
@@ -382,7 +390,7 @@ int main() {
 
 ### 4.2 统计单词数量
 
-**关键观察：** 单词之间由空格分隔。统计单词数量的核心思想是：**数"从空格到非空格的切换次数"**。
+**关键观察：** 在基础教材里，我们通常把单词看作由**空白字符**（空格、制表符、换行等）分隔。统计单词数量的核心思想是：**数“分隔符 → 非分隔符”的切换次数**。
 
 有多种思路，这里介绍最经典的一种：
 
@@ -392,13 +400,17 @@ int main() {
 #include <iostream>
 using namespace std;
 
+bool isSeparator(char ch) {
+    return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
+}
+
 int countWords(const char str[]) {
     int words = 0;
     
     for (int i = 0; str[i] != '\0'; i++) {
-        // 当前字符是非空格，且前一个字符是空格（或这是第一个字符）
+        // 当前字符是非分隔符，且前一个字符是分隔符（或这是第一个字符）
         // 说明一个新单词开始了
-        if (str[i] != ' ' && (i == 0 || str[i - 1] == ' ')) {
+        if (!isSeparator(str[i]) && (i == 0 || isSeparator(str[i - 1]))) {
             words++;
         }
     }
@@ -420,6 +432,8 @@ int main() {
     return 0;
 }
 ```
+
+> 📌 如果课程题目**明确说明只有空格 `' '` 作为分隔符**，那就把 `isSeparator()` 简化为 `ch == ' '` 即可。这里给出的版本更接近真实文本处理场景。
 
 **逐步执行追踪（以 `"How are you"` 为例）：**
 
@@ -499,16 +513,18 @@ bool isStrongPassword(const char str[]) {
     bool hasLower = false;
     bool hasDigit = false;
     bool hasSpecial = false;
+    int length = 0;
     
     for (int i = 0; str[i] != '\0'; i++) {
         char ch = str[i];
+        length++;
         if (ch >= 'A' && ch <= 'Z')      hasUpper = true;
         else if (ch >= 'a' && ch <= 'z') hasLower = true;
         else if (ch >= '0' && ch <= '9') hasDigit = true;
         else                              hasSpecial = true;
     }
     
-    return hasUpper && hasLower && hasDigit && hasSpecial;
+    return length >= 8 && hasUpper && hasLower && hasDigit && hasSpecial;
 }
 
 int main() {
@@ -518,12 +534,14 @@ int main() {
     cout << "isAllAlpha(\"Hello1\"): "  << isAllAlpha("Hello1") << endl;   // false
     cout << "isAllDigit(\"12345\"): "   << isAllDigit("12345") << endl;    // true
     cout << "isAllDigit(\"123a5\"): "   << isAllDigit("123a5") << endl;    // false
-    cout << "isStrongPassword(\"Abc1!\"): " << isStrongPassword("Abc1!") << endl;  // true
+    cout << "isStrongPassword(\"Abcdef1!\"): " << isStrongPassword("Abcdef1!") << endl;  // true
     cout << "isStrongPassword(\"abc\"): "   << isStrongPassword("abc") << endl;    // false
     
     return 0;
 }
 ```
+
+> 📌 `isAllAlpha()`、`isAllDigit()`、`isAlphanumeric()` 对**空字符串**都会返回 `true`。这是“所有字符都满足条件”的数学化写法，没有逻辑错误；如果业务要求“必须非空”，再额外加上 `str[0] != '\0'` 即可。
 
 ### 5.3 验证的通用模式
 
@@ -560,8 +578,8 @@ bool validate(const char str[]) {
 using namespace std;
 
 void reverseString_v1(char str[]) {
-    int len = strlen(str);
-    char temp[100];   // 辅助数组（假设长度够用）
+    int len = static_cast<int>(strlen(str));
+    char* temp = new char[len + 1];   // 动态申请恰好够用的空间
     
     // 从原字符串尾部开始，逐个复制到辅助数组
     for (int i = 0; i < len; i++) {
@@ -571,6 +589,7 @@ void reverseString_v1(char str[]) {
     
     // 将结果复制回原数组
     strcpy(str, temp);
+    delete[] temp;
 }
 ```
 
@@ -598,7 +617,7 @@ temp = "OLLEH" ✅
 ```cpp
 void reverseString_v2(char str[]) {
     int left = 0;
-    int right = strlen(str) - 1;
+    int right = static_cast<int>(strlen(str)) - 1;
     
     while (left < right) {
         // 交换 str[left] 和 str[right]
@@ -611,6 +630,8 @@ void reverseString_v2(char str[]) {
     }
 }
 ```
+
+> 📌 这里把 `strlen(str)` 显式转成 `int`，是为了避免 `strlen()` 返回的无符号类型 `size_t` 在参与 `- 1` 运算时带来不必要的类型陷阱。
 
 **执行过程追踪（以 `"HELLO"` 为例）：**
 
@@ -660,6 +681,8 @@ left == right，循环结束（中间元素不需要动）
 ### 7.1 字符串比较
 
 **字符串比较** 是逐字符按 ASCII 值进行比较的过程，类似于字典中单词的排序规则（**字典序/Lexicographic Order**）。
+
+> 📌 这里比较的是**机器里的字典序**，不完全等同于自然语言词典顺序。例如在 ASCII 中，大写字母 `'A'~'Z'` 会排在小写字母 `'a'~'z'` 前面。
 
 **比较规则：**
 1. 从第一个字符开始，逐一比较两个字符串对应位置的字符
@@ -720,8 +743,8 @@ int main() {
 using namespace std;
 
 bool isPalindrome_v1(const char str[]) {
-    int len = strlen(str);
-    char reversed[100];
+    int len = static_cast<int>(strlen(str));
+    char* reversed = new char[len + 1];
     
     // 创建反转副本
     for (int i = 0; i < len; i++) {
@@ -730,7 +753,9 @@ bool isPalindrome_v1(const char str[]) {
     reversed[len] = '\0';
     
     // 比较原始和反转后的字符串
-    return strcmp(str, reversed) == 0;
+    bool result = strcmp(str, reversed) == 0;
+    delete[] reversed;
+    return result;
 }
 ```
 
@@ -741,7 +766,7 @@ bool isPalindrome_v1(const char str[]) {
 ```cpp
 bool isPalindrome_v2(const char str[]) {
     int left = 0;
-    int right = strlen(str) - 1;
+    int right = static_cast<int>(strlen(str)) - 1;
     
     while (left < right) {
         if (str[left] != str[right]) {
@@ -850,10 +875,16 @@ using namespace std;
 void findDuplicates_hash(const char str[]) {
     // ASCII 码范围 0~127，创建一个计数数组
     int count[128] = {0};  // 全部初始化为 0
+    bool hasNonAscii = false;
     
     // 第一趟：遍历字符串，统计每个字符的出现次数
     for (int i = 0; str[i] != '\0'; i++) {
-        count[(int)str[i]]++;  // 以字符的 ASCII 值作为索引
+        unsigned char ch = static_cast<unsigned char>(str[i]);
+        if (ch < 128) {
+            count[ch]++;  // 以字符的 ASCII 值作为索引
+        } else {
+            hasNonAscii = true;
+        }
     }
     
     // 第二趟：遍历计数数组，输出出现次数 > 1 的字符
@@ -861,6 +892,10 @@ void findDuplicates_hash(const char str[]) {
         if (count[i] > 1) {
             cout << "'" << (char)i << "' 出现了 " << count[i] << " 次" << endl;
         }
+    }
+
+    if (hasNonAscii) {
+        cout << "警告: 该版本只统计 ASCII 字符，非 ASCII 字节已跳过。" << endl;
     }
 }
 
@@ -907,6 +942,10 @@ void findDuplicates_lowercase(const char str[]) {
     int count[26] = {0};
     
     for (int i = 0; str[i] != '\0'; i++) {
+        if (str[i] < 'a' || str[i] > 'z') {
+            cout << "该优化版仅适用于全小写英文字母字符串。" << endl;
+            return;
+        }
         count[str[i] - 'a']++;  // 'a'→0, 'b'→1, ..., 'z'→25
     }
     
@@ -919,6 +958,8 @@ void findDuplicates_lowercase(const char str[]) {
 ```
 
 `str[i] - 'a'` 这个映射非常常见：将字母 `'a'~'z'` 映射到索引 `0~25`。
+
+> ⚠️ 一旦输入中混入大写字母、数字或中文，`str[i] - 'a'` 就可能越界，因此这类“26 个槽位”的优化写法一定要配合**输入范围假设**一起讲清楚。
 
 ---
 
@@ -979,11 +1020,15 @@ void findDuplicates_lowercase(const char str[]) {
 using namespace std;
 
 void findDuplicates_bitwise(const char str[]) {
-    int H = 0;   // 哈希位图（Bit Map），初始全0
+    unsigned int H = 0;   // 哈希位图（Bit Map），初始全0
     
     for (int i = 0; str[i] != '\0'; i++) {
+        if (str[i] < 'a' || str[i] > 'z') {
+            cout << "该位运算版本只适用于小写英文字母 a~z。" << endl;
+            return;
+        }
         int x = str[i] - 'a';    // 字母对应的位编号 (0~25)
-        int mask = 1 << x;        // 生成掩码
+        unsigned int mask = 1u << x;        // 生成掩码
         
         if (H & mask) {
             // 第 x 位已经是 1，说明之前出现过 → 重复字符！
@@ -1047,11 +1092,15 @@ int main() {
 
 ```cpp
 void findDuplicates_bitwise_v2(const char str[]) {
-    int seen = 0;       // 记录"已见过的字符"
-    int reported = 0;   // 记录"已报告过的重复字符"
+    unsigned int seen = 0;       // 记录"已见过的字符"
+    unsigned int reported = 0;   // 记录"已报告过的重复字符"
     
     for (int i = 0; str[i] != '\0'; i++) {
-        int mask = 1 << (str[i] - 'a');
+        if (str[i] < 'a' || str[i] > 'z') {
+            cout << "该位运算版本只适用于小写英文字母 a~z。" << endl;
+            return;
+        }
+        unsigned int mask = 1u << (str[i] - 'a');
         
         if (seen & mask) {
             // 之前见过
@@ -1066,6 +1115,8 @@ void findDuplicates_bitwise_v2(const char str[]) {
     }
 }
 ```
+
+> 📌 这里使用 `1u << x` 而不是 `1 << x`，是为了明确采用**无符号位运算**。虽然本题只会用到第 0~25 位，但这种写法更严谨，也更符合底层编程习惯。
 
 ### 9.7 位运算方法 vs 计数数组方法
 
@@ -1134,6 +1185,8 @@ int main() {
 
 **时间复杂度：O(n log n)**（排序的开销）
 
+> ⚠️ 这个版本会**原地修改** `s1` 和 `s2` 的内容，所以如果后续还要保留原字符串，应该先复制一份再排序。
+
 ### 10.3 方法二：计数数组法（推荐）⭐
 
 **思路：** 统计两个字符串中每个字符出现的次数，如果完全一致，就是变位词。
@@ -1153,6 +1206,9 @@ bool isAnagram_count(const char s1[], const char s2[]) {
     
     // 遍历两个字符串（它们等长）
     for (int i = 0; s1[i] != '\0'; i++) {
+        if (s1[i] < 'a' || s1[i] > 'z' || s2[i] < 'a' || s2[i] > 'z') {
+            return false;  // 这个优化版只处理全小写字母
+        }
         count[s1[i] - 'a']++;   // s1 的字符 +1
         count[s2[i] - 'a']--;   // s2 的字符 -1
     }
@@ -1198,6 +1254,8 @@ i=5: s1='n'(+1) → count[13]=0     s2='t'(-1) → count[19]=0
 | ------------ | ---------- | ---------- | ---------------- |
 | 排序比较     | O(n log n) | O(1)       | ✅ 会修改         |
 | **计数数组** | **O(n)**   | O(1)*      | ❌ 不修改         |
+
+> *这里的 O(1) 指字符集大小固定（如 26 个小写字母）时的额外空间复杂度。
 
 ---
 
