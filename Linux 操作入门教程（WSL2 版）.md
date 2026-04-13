@@ -3582,8 +3582,8 @@ wsl --shutdown
 
 **手动释放 WSL 内存**：
 ```bash
-# 在 WSL 中清理缓存
-sudo sh -c "echo 3 > /proc/sys/vm/drop_caches"
+# 在 WSL 中清理缓存（先 sync，再 drop_caches）
+sudo sh -c "sync; echo 3 > /proc/sys/vm/drop_caches"
 ```
 
 或者直接重启 WSL（在 PowerShell 中）：
@@ -4334,7 +4334,9 @@ fi
 
 read -p "请输入你的成绩: " score
 
-if [ "$score" -ge 90 ]; then
+if ! [[ "$score" =~ ^[0-9]+$ ]]; then
+    echo "输入无效：请输入 0-100 的整数"
+elif [ "$score" -ge 90 ]; then
     echo "优秀！🏆"
 elif [ "$score" -ge 80 ]; then
     echo "良好 👍"
@@ -4345,7 +4347,7 @@ else
 fi
 ```
 
-> 💡 **为什么变量要加双引号？** `"$score"` 而不是 `$score`：如果用户没有输入任何内容，`$score` 为空，`[ -ge 90 ]` 会语法错误，而 `[ "" -ge 90 ]` 虽然也会报错但更安全。**养成给变量加引号的习惯。**
+> 💡 **为什么变量要加双引号？** `"$score"` 而不是 `$score`：变量中可能包含空格或为空，不加引号容易触发参数拆分与语法错误。进行数值比较前，先用正则校验输入是否合法。**养成给变量加引号的习惯。**
 
 ### 9.3.3 字符串比较
 
