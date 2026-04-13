@@ -244,6 +244,14 @@ print(text.split("-"))      # ['a', 'b', 'c', 'd', 'e']
 print(text.split("-", 2))   # ['a', 'b', 'c-d-e']  只分割前2次
 ```
 
+> 💡 **`split()` 和 `split(" ")` 不完全一样**：
+>
+> ```python
+> text = "  a   b  c  "
+> print(text.split())     # ['a', 'b', 'c']   默认按任意空白切分，并自动忽略多余空白
+> print(text.split(" "))  # ['', '', 'a', '', '', 'b', '', 'c', '', '']  按单个空格切分
+> ```
+
 #### 1.6.2 `join()` —— 将列表拼接为字符串（split 的逆操作）
 
 ```python
@@ -318,9 +326,13 @@ print(s.rstrip())   # "   Hello World" （只去除右边）
 s = "###Hello###"
 print(s.strip("#"))   # Hello
 
+s = "#@##Hello##@#"
+print(s.strip("#@"))   # Hello
+
 # 实际应用：处理用户输入
-username = input("请输入用户名：")  # 用户可能不小心多打空格
-username = username.strip()         # 去掉首尾空格，再处理
+raw_username = "  alice  "      # 假设这是用户输入
+username = raw_username.strip()  # 去掉首尾空格，再处理
+print(username)                  # alice
 ```
 
 > 💡 `strip()` 在处理文件读取时特别有用，因为每行末尾通常会有换行符 `\n`：
@@ -328,7 +340,21 @@ username = username.strip()         # 去掉首尾空格，再处理
 > ```python
 > line = "Hello World\n"
 > print(line.strip())  # Hello World （去掉了末尾的换行符）
+> 
+> 空格 ' '
+> 制表符 \t
+> 换行符 \n
+> 回车符 \r
 > ```
+
+> ⚠️ **`strip(chars)` 去掉的是“首尾连续出现的这些字符”，不是删除某个固定前缀/后缀**：
+>
+> ```python
+> s = "abcHelloacb"
+> print(s.strip("abc"))  # Hello
+> ```
+>
+> 因为 `strip("abc")` 的意思是：只要字符串首尾是 `a`、`b`、`c` 中的任意字符，就持续删除，直到遇到不属于这个集合的字符为止。
 
 #### 1.6.5 `find()` 和 `count()` —— 查找与计数
 
@@ -356,6 +382,7 @@ filename = "report_2026.pdf"
 
 print(filename.startswith("report"))  # True
 print(filename.endswith(".pdf"))      # True
+print(filename.endswith("pdf"))      # True
 print(filename.endswith(".txt"))      # False
 
 # 实际应用：过滤文件类型
@@ -589,6 +616,8 @@ import re
 pattern = r"\d+"  # 推荐写法
 ```
 
+> ⚠️ **原始字符串也有一个常见限制**：它**不能以单个反斜杠结尾**，例如 `r"C:\new\"` 是非法写法；如果末尾必须保留反斜杠，通常写成 `"C:\\new\\"`。
+
 ---
 
 ### 2.4 字符串编码
@@ -612,6 +641,9 @@ s = "你好Python"
 encoded = s.encode("utf-8")     # 字符串 → 字节串
 print(encoded)                   # b'\xe4\xbd\xa0\xe5\xa5\xbdPython'
 print(type(encoded))             # <class 'bytes'>
+
+print(len("中"))                 # 1  （1个字符）
+print(len("中".encode("utf-8"))) # 3  （UTF-8 下占 3 个字节）
 
 decoded = encoded.decode("utf-8")  # 字节串 → 字符串
 print(decoded)                      # 你好Python
@@ -662,6 +694,8 @@ print(result)  # ['Hello', 'Hello']
 #### 3.2.2 `.` —— 匹配任意单个字符（除了换行符）
 
 ```python
+import re
+
 text = "cat cot cut c_t c9t"
 result = re.findall(r"c.t", text)
 print(result)  # ['cat', 'cot', 'cut', 'c_t', 'c9t']
@@ -868,6 +902,8 @@ print(re.findall(r"\w+\.(?:jpg|png|gif)", text))
 
 ---
 
+> 💡 上表中的 `\|` 和 `cat\|dog` 是 **Markdown 表格里为了显示竖线而做的转义**；真正写正则表达式时，请直接写 `|`，例如 `cat|dog`。
+
 ### 3.4 常用函数
 
 #### 3.4.1 `re.search()` —— 搜索第一个匹配
@@ -945,7 +981,21 @@ print(re.search(r"\d+", "abc123"))  # <re.Match object; span=(3, 6), match='123'
 > - `match`：只看开头，"这个字符串是不是以...开头？"
 > - `search`：全文搜索，"这个字符串里有没有...？"
 
-#### 3.4.5 `re.split()` —— 按模式分割
+#### 3.4.5 `re.fullmatch()` —— 整串完整匹配
+
+当你的目标是“**整个字符串必须完全符合这个模式**”时，`fullmatch()` 比 `^...$` 更直观：
+
+```python
+import re
+
+pattern = r"1[3-9]\d{9}"
+
+print(bool(re.fullmatch(pattern, "13800138000")))   # True
+print(bool(re.fullmatch(pattern, "13800138000abc")))  # False
+print(bool(re.fullmatch(pattern, "abc13800138000")))  # False
+```
+
+#### 3.4.6 `re.split()` —— 按模式分割
 
 ```python
 import re
@@ -957,6 +1007,20 @@ print(result)  # ['苹果', '香蕉', '橘子', '西瓜', '葡萄']
 
 # 对比字符串的split：只能按固定字符分割
 print(text.split(","))  # ['苹果', '香蕉;橘子 西瓜|葡萄']  只能按逗号
+```
+
+#### 3.4.7 `re.compile()` —— 复用模式并配合标志位
+
+当一个正则要被重复使用，或者你想配合 `IGNORECASE`、`MULTILINE` 等标志位时，`re.compile()` 会更清晰：
+
+```python
+import re
+
+text = "Python\npython\nPYTHON"
+
+pattern = re.compile(r"^python$", re.IGNORECASE | re.MULTILINE)
+matches = pattern.findall(text)
+print(matches)  # ['Python', 'python', 'PYTHON']
 ```
 
 ---
@@ -1047,6 +1111,11 @@ print(pairs)  # [('title', 'Python教程'), ('p', '这是一个段落'), ('a', '
 # \1 是反向引用，表示和第1个分组匹配的内容一致
 ```
 
+> ⚠️ **案例边界说明（很重要）**：
+> - 教程里的邮箱、日期、IP 正则都属于“教学友好版”，适合入门，不代表覆盖所有合法情况。
+> - 如果目的是“验证整个字符串是否合法”，优先考虑 `re.fullmatch()`，语义比 `^...$` 更直接。
+> - **不要用正则解析复杂 HTML/XML**。示例中的 HTML 提取只适合结构非常简单、没有嵌套的片段；真实项目建议使用 `BeautifulSoup`、`lxml` 等解析器。
+
 ---
 
 ## 四、列表与字符串结合
@@ -1081,6 +1150,8 @@ print(parts)      # ['', 'home', 'user', 'documents', 'file.txt']
 filename = parts[-1]
 print(filename)   # file.txt
 ```
+
+> 💡 这里用 `split("/")` 只是为了演示字符串处理思路；真实项目里处理文件路径，更推荐标准库 `pathlib`，因为它能同时兼容 Windows 和 Linux/macOS。
 
 ---
 
@@ -1236,8 +1307,8 @@ print(f"不重复字符数：{len(unique_chars)}")  # 8
 article = "the cat sat on the mat the cat ate the rat"
 words = article.split()
 unique_words = set(words)
-print(f"总词数：{len(words)}")         # 10
-print(f"不重复词数：{len(unique_words)}")  # 6
+print(f"总词数：{len(words)}")         # 11
+print(f"不重复词数：{len(unique_words)}")  # 7
 print(f"不重复的词：{unique_words}")
 # {'cat', 'on', 'ate', 'sat', 'the', 'mat', 'rat'}
 ```
@@ -1347,9 +1418,9 @@ def clean_text(raw_text):
     文本清洗函数：
     1. 去除首尾空白
     2. 去除HTML标签
-    3. 去除多余空格
-    4. 去除特殊符号
-    5. 统一小写
+    3. 合并多余空白
+    4. 去除特殊符号（保留中英文、数字、空格和常见中英文标点）
+    5. 再次清理首尾空白
     """
     text = raw_text
     
@@ -1365,8 +1436,8 @@ def clean_text(raw_text):
     text = re.sub(r"\s+", " ", text)
     print(f"合并空白字符：{text!r}")
     
-    # 第4步：去除特殊符号（只保留中文、英文、数字、空格和基本标点）
-    text = re.sub(r"[^\w\s\u4e00-\u9fff，。！？、；：""''（）]", "", text)
+    # 第4步：去除特殊符号（保留常见中英文标点）
+    text = re.sub(r"[^\w\s\u4e00-\u9fff,.!?，。！？、；：:;()（）-]", "", text)
     print(f"去除特殊符号：{text!r}")
     
     # 第5步：去除首尾可能多余的空格
@@ -1392,9 +1463,9 @@ print(f"\n最终结果：{result}")
 去除首尾空白：'<p>  Hello,   World!!!  </p>\n   <br/>这是一个@#$测试文本~~~  \n   <b>包含各种   乱七八糟的   格式</b>'
 去除HTML标签：'  Hello,   World!!!  \n   这是一个@#$测试文本~~~  \n   包含各种   乱七八糟的   格式'
 合并空白字符：' Hello, World!!! 这是一个@#$测试文本~~~ 包含各种 乱七八糟的 格式'
-去除特殊符号：' Hello World 这是一个测试文本 包含各种 乱七八糟的 格式'
+去除特殊符号：' Hello, World!!! 这是一个测试文本 包含各种 乱七八糟的 格式'
 
-最终结果：Hello World 这是一个测试文本 包含各种 乱七八糟的 格式
+最终结果：Hello, World!!! 这是一个测试文本 包含各种 乱七八糟的 格式
 ```
 
 **另一个实用场景——清洗用户输入数据**：
@@ -1463,8 +1534,9 @@ resume = """
 """
 
 # 提取所有 "key：value" 格式的信息
-pairs = re.findall(r"(\S+)：(\S+)", resume)
-info = dict(pairs)
+# 注意：这里按“整行”提取，值可以包含空格和逗号
+pairs = re.findall(r"^(\S+?)：(.+)$", resume, flags=re.MULTILINE)
+info = {key: value.strip() for key, value in pairs}
 print("=== 提取到的信息 ===")
 for key, value in info.items():
     print(f"  {key}: {value}")
@@ -1498,7 +1570,7 @@ if skill_match:
   学历: 本科
   工作经验: 5年
   期望薪资: 15000-20000元/月
-  技能: Python,
+  技能: Python, Java, SQL, Docker
 
 期望薪资范围：15000-20000元
 平均期望薪资：17500元
@@ -1511,6 +1583,7 @@ if skill_match:
 
 ```python
 import re
+from collections import Counter
 
 log_data = """
 2026-04-09 10:23:45 [INFO] User login: user_id=1001, ip=192.168.1.100
@@ -1534,11 +1607,10 @@ for user_id, ip in logins:
     print(f"  用户{user_id} 从 {ip} 登录")
 
 # 统计各级别日志数量
-levels = re.findall(r"\[(INFO|ERROR|WARNING)\]", log_data)
+levels = Counter(re.findall(r"\[(INFO|ERROR|WARNING)\]", log_data))
 print("\n=== 日志级别统计 ===")
-for level in set(levels):
-    count = levels.count(level)
-    print(f"  {level}: {count}条")
+for level in ["INFO", "WARNING", "ERROR"]:
+    print(f"  {level}: {levels[level]}条")
 
 # 提取时间戳
 timestamps = re.findall(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", log_data)
@@ -1558,8 +1630,8 @@ print(f"\n日志时间范围：{timestamps[0]} 到 {timestamps[-1]}")
   用户1001 从 192.168.1.100 登录
 
 === 日志级别统计 ===
-  WARNING: 1条
   INFO: 3条
+  WARNING: 1条
   ERROR: 2条
 
 日志时间范围：2026-04-09 10:23:45 到 2026-04-09 10:28:00
@@ -1612,22 +1684,22 @@ for word, count in sorted_words[:10]:
 输出：
 
 ```
-总词数：30
-不重复词数：14
+总词数：33
+不重复词数：20
 
 === 词频统计 Top 10 ===
 单词              次数       占比
 ------------------------------
-python             6   20.0% ██████
-is                 5   16.7% █████
-programming        3   10.0% ███
-love               2    6.7% ██
-a                  1    3.3% █
-great              1    3.3% █
-language           1    3.3% █
-easy               1    3.3% █
-to                 1    3.3% █
-learn              1    3.3% █
+python             7   21.2% ███████
+is                 5   15.2% █████
+programming        3    9.1% ███
+love               2    6.1% ██
+a                  1    3.0% █
+great              1    3.0% █
+language           1    3.0% █
+easy               1    3.0% █
+to                 1    3.0% █
+learn              1    3.0% █
 ```
 
 #### 中文词频统计（简易版）
@@ -1732,6 +1804,24 @@ print(f"\n合并后'python'出现了 {total['python']} 次")
 import re
 from collections import Counter
 
+def unique_in_order(items):
+    return list(dict.fromkeys(items))
+
+
+def protect_special_dots(text):
+    """
+    在句子切分前临时保护 URL、邮箱和小数中的点号，
+    避免它们被误判为句号。
+    """
+    protected = re.sub(
+        r"https?://[^\s<>\"']+|[A-Za-z0-9_.+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+",
+        lambda m: m.group(0).replace(".", "<DOT>"),
+        text,
+    )
+    protected = re.sub(r"\d+\.\d+", lambda m: m.group(0).replace(".", "<DOT>"), protected)
+    return protected
+
+
 def analyze_text(text, title="文本分析报告"):
     """
     综合文本分析工具
@@ -1739,7 +1829,7 @@ def analyze_text(text, title="文本分析报告"):
     1. 基本统计（字符数、行数、句子数等）
     2. 词频统计
     3. 信息提取（邮箱、网址、数字等）
-    4. 文本清洗
+    4. 词汇丰富度分析
     """
     
     print("=" * 50)
@@ -1756,9 +1846,10 @@ def analyze_text(text, title="文本分析报告"):
     lines = text.strip().split("\n")
     non_empty_lines = [line for line in lines if line.strip()]
     
-    # 用正则拆分句子
-    sentences = re.split(r"[.!?。！？]+", text)
-    sentences = [s.strip() for s in sentences if s.strip()]
+    # 用正则拆分句子（简化版，但避免误切分 URL、邮箱和小数）
+    sentence_source = protect_special_dots(text)
+    sentences = re.split(r"[.!?。！？]+", sentence_source)
+    sentences = [s.replace("<DOT>", ".").strip() for s in sentences if s.strip()]
     
     # 提取英文单词
     english_words = re.findall(r"[a-zA-Z]+", text)
@@ -1814,29 +1905,29 @@ def analyze_text(text, title="文本分析报告"):
     print("\n【三、信息提取】")
     
     # 邮箱
-    emails = re.findall(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", text)
+    emails = unique_in_order(re.findall(r"\b[A-Za-z0-9_.+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+\b", text))
     if emails:
         print(f"  📧 邮箱（{len(emails)}个）：")
-        for e in set(emails):
+        for e in emails:
             print(f"     {e}")
     
     # 网址
-    urls = re.findall(r"https?://[^\s<>\"']+", text)
+    urls = unique_in_order(re.findall(r"https?://[^\s<>\"']*[A-Za-z0-9/#]", text))
     if urls:
         print(f"  🔗 网址（{len(urls)}个）：")
-        for u in set(urls):
+        for u in urls:
             print(f"     {u}")
     
     # 手机号
-    phones = re.findall(r"1[3-9]\d{9}", text)
+    phones = unique_in_order(re.findall(r"1[3-9]\d{9}", text))
     if phones:
         print(f"  📱 手机号（{len(phones)}个）：")
-        for p in set(phones):
+        for p in phones:
             masked = p[:3] + "****" + p[7:]
             print(f"     {masked}")
     
     # 日期
-    dates = re.findall(r"\d{4}[-/年]\d{1,2}[-/月]\d{1,2}[日]?", text)
+    dates = unique_in_order(re.findall(r"\d{4}[-/年]\d{1,2}[-/月]\d{1,2}[日]?", text))
     if dates:
         print(f"  📅 日期（{len(dates)}个）：")
         for d in dates:
@@ -1867,6 +1958,7 @@ def analyze_text(text, title="文本分析报告"):
 
 # ============ 测试 ============
 
+# 以下文本为虚构示例，仅用于演示文本分析流程。
 sample_text = """
 Python Programming News - April 2026
 
@@ -1892,6 +1984,8 @@ Python makes programming fun and accessible for everyone.
 analyze_text(sample_text, "Python 新闻文本分析")
 ```
 
+> 💡 这里的句子切分属于**规则法近似统计**：对于学术论文、带缩写或更复杂标点的文本，若需要更高精度，通常要结合专门的分句工具进一步处理。
+
 输出：
 
 ```
@@ -1900,28 +1994,28 @@ analyze_text(sample_text, "Python 新闻文本分析")
 ==================================================
 
 【一、基本统计】
-  总字符数（含空格）：815
-  总字符数（不含空格）：678
-  总行数：18
-  非空行数：14
-  句子数：11
-  英文单词数：120
+  总字符数（含空格）：898
+  总字符数（不含空格）：761
+  总行数：19
+  非空行数：15
+  句子数：10
+  英文单词数：126
   中文字符数：0
-  数字个数：6
+  数字个数：8
 
 【二、英文词频统计 Top 10】
   单词              次数  可视化
   ----------------------------------------
-  python             10  ████████████████████
-  programming         4  ████████
-  community           2  ████
-  developers          2  ████
-  learning            2  ████
-  machine             2  ████
-  data                2  ████
-  web                 2  ████
-  new                 2  ████
-  language            2  ████
+  python            12  ████████████████████
+  programming        4  ██████
+  org                3  █████
+  community          3  █████
+  developers         2  ███
+  data               2  ███
+  machine            2  ███
+  learning           2  ███
+  web                2  ███
+  news               1  █
 
 【三、信息提取】
   📧 邮箱（2个）：
@@ -1935,10 +2029,10 @@ analyze_text(sample_text, "Python 新闻文本分析")
      2026-03-15
 
 【四、词汇丰富度】
-  总词数：120
-  不重复词数：79
-  词汇丰富度：65.8%
-  仅出现一次的词（前10个）：continues, dominate, world, according, latest
+  总词数：126
+  不重复词数：85
+  词汇丰富度：67.5%
+  仅出现一次的词（前10个）：news, april, continues, dominate, world, according, latest, survey, used, over
 
 ==================================================
   分析完成！
