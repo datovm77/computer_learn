@@ -2571,10 +2571,10 @@ Ubuntu 不同版本的软件源配置位置不同：
 
 ```bash
 # 先看传统 sources.list（若存在）
-cat /etc/apt/sources.list
+[ -f /etc/apt/sources.list ] && cat /etc/apt/sources.list
 
 # 再看 Deb822 源文件（24.04+ 常见）
-cat /etc/apt/sources.list.d/ubuntu.sources
+[ -f /etc/apt/sources.list.d/ubuntu.sources ] && cat /etc/apt/sources.list.d/ubuntu.sources
 ```
 
 你会看到类似这样的内容：
@@ -2603,12 +2603,12 @@ deb <软件源URL> <Ubuntu版本代号> <软件分类>
 
 ```bash
 # 1. 备份原始源配置文件（两种格式都备份）
-sudo cp /etc/apt/sources.list /etc/apt/sources.list.backup
-sudo cp /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.sources.backup
+[ -f /etc/apt/sources.list ] && sudo cp /etc/apt/sources.list /etc/apt/sources.list.backup
+[ -f /etc/apt/sources.list.d/ubuntu.sources ] && sudo cp /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.sources.backup
 
 # 2. 编辑源文件（按你的系统实际格式编辑）
-sudo nano /etc/apt/sources.list
-sudo nano /etc/apt/sources.list.d/ubuntu.sources
+[ -f /etc/apt/sources.list ] && sudo nano /etc/apt/sources.list
+[ -f /etc/apt/sources.list.d/ubuntu.sources ] && sudo nano /etc/apt/sources.list.d/ubuntu.sources
 
 # 3. 把所有 http://archive.ubuntu.com 替换为
 
@@ -3557,8 +3557,8 @@ watch -n 2 free -h
 
 **WSL2 的内存与 Windows 共享**，有一些特殊行为：
 
-1. **WSL2 默认最多使用 Windows 总内存的 50%**（或 8GB，取较小值）
-2. **WSL2 的内存不会主动归还给 Windows**（在旧版本中），可能导致 `vmmem` 进程在 Windows 任务管理器中占用大量内存
+1. **WSL2 的可用内存上限受版本与配置影响**，未显式配置时通常会占用较多内存
+2. **旧版本中内存回收不积极**，可能导致 `vmmem` 进程在 Windows 任务管理器中占用较高内存；新版本已有改进
 
 **查看 WSL 的内存占用**（在 Windows PowerShell 中）：
 ```powershell
@@ -4490,9 +4490,9 @@ for file in /etc/*.conf; do
 done
 
 # 遍历命令输出
-for user in $(cat /etc/passwd | cut -d: -f1); do
+while IFS=: read -r user _; do
     echo "用户: $user"
-done
+done < /etc/passwd
 ```
 
 ### 9.4.2 `while` 循环
@@ -5045,8 +5045,9 @@ npm -v
 # ========== 5. 安装其他有用工具 ==========
 sudo apt install -y \
     htop tree zip unzip \
-    jq \                   # JSON 处理工具
-    ripgrep                # 超快的搜索工具
+    jq \
+    ripgrep
+# 说明：上面把包名按续行拆开写，注释放在命令块外更安全。
 
 # ========== 6. 配置 Shell 环境 ==========
 # 添加一些实用别名到 .bashrc
@@ -5613,3 +5614,37 @@ wsl --export Ubuntu file   # 导出/备份
 3. **遇到问题先 Google/搜索错误信息**——Linux 社区的答案非常丰富
 4. **多写 Shell 脚本**——自动化是 Linux 的灵魂
 5. **考虑买一台便宜的云服务器练手**——真实环境会让你学得更快
+
+---
+
+## 教学严谨补充（课堂必讲）
+
+### A. 先区分命令运行环境
+
+- 出现 `wsl ...` 的命令，默认在 **Windows PowerShell/CMD** 运行。
+- 出现 `apt`、`systemctl`、`ls`、`grep` 等命令，默认在 **WSL 的 Linux 终端** 运行。
+- 教学时建议在命令块上方标注 `Windows` 或 `WSL`，避免学生直接照抄后报错。
+
+### B. Ubuntu 24.04+ 的 APT 源格式变化
+
+- 新环境常使用 Deb822：`/etc/apt/sources.list.d/ubuntu.sources`。
+- 传统教程只改 `/etc/apt/sources.list` 会出现“改了但不生效”的现象。
+- 建议教学时明确说明两种文件的差异与适用版本。
+
+### C. Shell 脚本的最低安全基线
+
+建议在示例脚本开头引入：
+
+```bash
+set -euo pipefail
+```
+
+- `-e`：任一步失败就退出，避免带错继续执行。
+- `-u`：使用未定义变量时报错。
+- `pipefail`：管道中任一命令失败都视为失败。
+
+### D. 输入校验先于逻辑判断
+
+- 用户输入参与数值比较前，先判断是否为合法数字。
+- 文件路径参与删除、覆盖前，先 `test -e/-d` 并打印确认信息。
+- 教学中应强调：可运行不代表可用于生产，防御性编程是基本素养。
