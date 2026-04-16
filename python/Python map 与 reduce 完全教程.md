@@ -102,7 +102,7 @@ for func in operations:
 
 #### 语法
 
-```python
+```text
 lambda 参数1, 参数2, ... : 表达式
 ```
 
@@ -211,7 +211,7 @@ def process(x):
 
 ### 2.2 基本语法
 
-```python
+```text
 map(function, iterable)
 ```
 
@@ -308,7 +308,7 @@ print(list(map(abs, [-3, -1, 0, 2, 5])))
 
 `map` 可以接收**多个可迭代对象**，此时函数也必须接收对应数量的参数：
 
-```python
+```text
 map(function, iterable1, iterable2, ...)
 ```
 
@@ -469,7 +469,7 @@ from functools import reduce
 
 ### 3.3 基本语法
 
-```python
+```text
 reduce(function, iterable[, initializer])
 ```
 
@@ -821,7 +821,7 @@ all([True, True, False])                             # ← 更好！
 
 在构建管道之前，先快速了解 `filter`：
 
-```python
+```text
 filter(function, iterable)
 ```
 
@@ -876,8 +876,8 @@ total = reduce(lambda acc, x: acc + x, passing_list, 0)
 
 # 计算平均分
 average = total / len(passing_list) if passing_list else 0
-print(f"及格人数：{len(passing_list)}")   # 及格人数：5
-print(f"及格平均分：{average:.1f}")       # 及格平均分：80.2
+print(f"及格人数：{len(passing_list)}")   # 及格人数：6
+print(f"及格平均分：{average:.1f}")       # 及格平均分：81.8
 ```
 
 #### 示例 2：电商订单处理
@@ -902,7 +902,7 @@ amounts = map(lambda o: o["price"] * o["quantity"], completed)
 # 步骤 3：reduce — 求总金额
 total_revenue = reduce(lambda acc, x: acc + x, amounts, 0)
 
-print(f"总营收：¥{total_revenue}")  # 总营收：¥5063
+print(f"总营收：¥{total_revenue}")  # 总营收：¥5263
 ```
 
 执行过程：
@@ -1219,10 +1219,9 @@ for i in range(5):
 
 print([f() for f in funcs])  # [0, 1, 2, 3, 4]  ← 正确
 
-# ✅ 或者直接用 map
-funcs = list(map(lambda i: lambda: i, range(5)))
-# 但这个也有同样的问题…正确写法：
-funcs = list(map(lambda i: (lambda i=i: i)(), range(5)))  # 不推荐，太绕了
+# ✅ 或者继续用 map + 默认参数捕获
+funcs = list(map(lambda i: (lambda i=i: i), range(5)))
+print([f() for f in funcs])  # [0, 1, 2, 3, 4]
 ```
 
 > 这个坑不仅限于 `map`，是 Python 闭包的通用问题。遇到在循环中创建 lambda/函数时，要格外小心。
@@ -1287,6 +1286,8 @@ list(map(lambda x: x ** 2, filter(lambda x: x > 3, range(10))))
 #### 建议 2：有现成函数时优先用 `map`
 
 ```python
+numbers = [1, 2, 3, 4, 5]
+
 # ✅ map + 现成函数 = 最简洁
 list(map(str, [1, 2, 3]))       # ['1', '2', '3']
 list(map(int, ['1', '2', '3'])) # [1, 2, 3]
@@ -1297,6 +1298,8 @@ list(map(len, ['hi', 'hello']))  # [2, 5]
 
 ```python
 from functools import reduce
+
+numbers = [1, 2, 3, 4, 5]
 
 # ❌ 不需要 reduce
 reduce(lambda x, y: x + y, numbers)   # → sum(numbers)
@@ -1310,6 +1313,14 @@ reduce(lambda x, y: x if x > y else y, numbers)  # → max(numbers)
 #### 建议 4：复杂的 lambda 应该改用 `def`
 
 ```python
+from functools import reduce
+
+items = [
+    {"category": "书籍", "name": "算法导论"},
+    {"category": "电子产品", "name": "机械键盘"},
+    {"category": "书籍", "name": "流畅的 Python"},
+]
+
 # ❌ 难以阅读的 lambda
 result = reduce(
     lambda acc, x: {**acc, x["category"]: acc.get(x["category"], []) + [x["name"]]},
@@ -1350,6 +1361,23 @@ big_gen = (x ** 2 for x in range(1_000_000))
 print(sys.getsizeof(big_gen))   # ≈ 112 bytes
 ```
 
+### 6.4 `reduce` 边界行为补充（易错但常被忽略）
+
+```python
+from functools import reduce
+
+# 1) 只有一个元素且没有初始值：直接返回该元素
+print(reduce(lambda x, y: x + y, [42]))  # 42
+
+# 2) 空序列 + 有初始值：返回初始值（不会调用函数）
+print(reduce(lambda x, y: x + y, [], 100))  # 100
+
+# 3) 空序列 + 无初始值：TypeError
+# reduce(lambda x, y: x + y, [])
+```
+
+> 记忆口诀：**空序列必须给初始值；单元素序列可不写初始值。**
+
 ---
 
 ## 总结速查表
@@ -1370,4 +1398,3 @@ print(sys.getsizeof(big_gen))   # ≈ 112 bytes
 5. 数据量大 → 使用惰性求值（`map` 或生成器表达式）
 
 ---
-
