@@ -665,18 +665,28 @@ data = {
     }
 }
 
-# 按路径取值
-keys = ["user", "profile", "name"]
-result = reduce(lambda d, key: d[key], keys, data)
-print(result)  # 输出：小明
+def safe_get(d, key):
+    """安全取键：只在字典上取值，缺失时返回 None"""
+    return d.get(key) if isinstance(d, dict) else None
+
+# 按路径取值（存在的路径）
+keys1 = ["user", "profile", "name"]
+result1 = reduce(safe_get, keys1, data)
+print(result1)  # 输出：小明
+
+# 按路径取值（不存在的路径）
+keys2 = ["user", "profile", "email"]
+result2 = reduce(safe_get, keys2, data)
+print(result2)  # 输出：None（不会抛 KeyError）
 ```
 
 执行过程：
 ```
 初始值：data（整个字典）
-步骤 1：data["user"] → {"profile": {"name": "小明", "age": 25}}
-步骤 2：...["profile"] → {"name": "小明", "age": 25}
-步骤 3：...["name"] → "小明"
+步骤 1：safe_get(data, "user") → {"profile": {"name": "小明", "age": 25}}
+步骤 2：safe_get(..., "profile") → {"name": "小明", "age": 25}
+步骤 3：safe_get(..., "name") → "小明"
+若某一步键不存在，则返回 None，并在后续继续保持 None，不会抛异常
 ```
 
 #### 案例 4：函数组合（管道）
@@ -866,10 +876,8 @@ scores = [45, 78, 92, 33, 88, 67, 54, 95, 71, 39]
 # 步骤 1：filter — 筛选出及格的分数（>= 60）
 passing = filter(lambda s: s >= 60, scores)
 
-# 步骤 2：map — 其实这里不需要变换，保持原样
-# 但为了演示，假设我们想归一化到百分制
-# (这里分数本身就是百分制，我们示范一个简单变换)
-passing_list = list(passing)  # 先转成列表，因为后面要用 len
+# 步骤 2：map — 统一转成 float，便于后续统计或格式化
+passing_list = list(map(float, passing))
 
 # 步骤 3：reduce — 求和
 total = reduce(lambda acc, x: acc + x, passing_list, 0)
@@ -1350,16 +1358,18 @@ import sys
 
 # 列表推导式：立刻在内存中创建 100 万个元素
 big_list = [x ** 2 for x in range(1_000_000)]
-print(sys.getsizeof(big_list))  # ≈ 8 MB
+print(sys.getsizeof(big_list))  # 仅列表容器本身大小（不含元素对象）
 
 # map：惰性，几乎不占额外内存
 big_map = map(lambda x: x ** 2, range(1_000_000))
-print(sys.getsizeof(big_map))   # ≈ 48 bytes！
+print(sys.getsizeof(big_map))   # map 对象本身大小（与 Python 实现有关）
 
 # 生成器表达式：同样惰性
 big_gen = (x ** 2 for x in range(1_000_000))
-print(sys.getsizeof(big_gen))   # ≈ 112 bytes
+print(sys.getsizeof(big_gen))   # 生成器对象本身大小（与 Python 实现有关）
 ```
+
+> 补充说明：`sys.getsizeof()` 更适合比较**对象本身**的开销，不代表完整数据的总内存占用；这里的重点是说明“惰性对象不会立刻生成全部数据”。
 
 ### 6.4 `reduce` 边界行为补充（易错但常被忽略）
 
