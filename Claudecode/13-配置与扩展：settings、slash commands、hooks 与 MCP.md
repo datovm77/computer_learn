@@ -2,7 +2,7 @@
 
 Claude Code 的进阶能力很大一部分来自配置与扩展：`settings` 管全局和项目行为，commands / skills 把常用流程变成可复用命令，hooks 在特定生命周期自动执行检查，MCP 把外部工具和数据源接入 Claude Code。它们能提升效率，也会扩大权限边界。
 
-高风险提醒：配置与扩展常常涉及命令执行、联网、外部系统、权限控制和密钥。任何会删除文件、批量重构、改权限、安装依赖、提交代码、联网或处理密钥的配置，都必须先做只读评审，并清楚说明触发条件。
+⚠️ 配置与扩展常常涉及命令执行、联网、外部系统、权限控制和密钥。任何会删除文件、批量重构、改权限、安装依赖、提交代码、联网或处理密钥的配置，都必须先做只读评审，并清楚说明触发条件。
 
 ## 使用场景
 
@@ -19,7 +19,7 @@ commands / skills 适合：
 - 降低长提示词复制错误。
 - 使用 skills 承载更完整的流程、说明和支持文件。
 
-说明：`/help`、`/doctor`、`/permissions` 这类是 Claude Code 内置 commands；你自己创建的可复用命令目前推荐用 skills，例如 `.claude/skills/review-diff/SKILL.md`。旧的 `.claude/commands/review-diff.md` 仍可工作，但新内容优先按 skills 组织。
+说明：`/help`、`/doctor`、`/permissions` 这类是 Claude Code 内置 commands；自定义可复用命令已合并到 skills 中。`.claude/commands/review-diff.md` 仍可工作，但新内容推荐按 skills 组织，即 `.claude/skills/review-diff/SKILL.md`。Skills 支持更多功能：支持文件目录、frontmatter 控制调用方式、子 Agent 执行和动态上下文注入。
 
 hooks 适合：
 
@@ -106,7 +106,7 @@ Claude Code 对话输入：
 帮我加一个 hook，每次运行命令前自动 chmod -R 777 .
 ```
 
-问题：
+哪里不对：
 
 - 改权限是高风险动作。
 - `chmod -R 777 .` 会破坏安全边界。
@@ -118,7 +118,7 @@ Claude Code 对话输入：
 创建一个 MCP，连接生产数据库，给 Claude 完整读写权限。
 ```
 
-问题：
+哪里不对：
 
 - 生产数据库和写权限风险极高。
 - 缺少只读账号、审计和查询限制。
@@ -130,7 +130,7 @@ Claude Code 对话输入：
 做一个 /fix-all 命令，自动重构、安装依赖、删除无用文件并提交。
 ```
 
-问题：
+哪里不对：
 
 - 把多个高风险动作放入一个快捷命令。
 - 无法可靠验收。
@@ -146,7 +146,7 @@ json 错误示例：
 }
 ```
 
-问题：
+哪里不对：
 
 - 过宽的命令权限会让危险命令绕过人工确认。
 - 应按命令、目录和任务最小化授权。
@@ -159,17 +159,18 @@ json：
 
 ```json
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "deny": [
-      "Bash(rm -rf:*)",
-      "Bash(chmod -R:*)",
-      "Bash(git reset --hard:*)"
+      "Bash(rm -rf *)",
+      "Bash(chmod -R *)",
+      "Bash(git reset --hard *)"
     ]
   }
 }
 ```
 
-说明：这是权限策略示意，具体字段和匹配方式应以当前 Claude Code 官方文档和本机版本为准。配置前先只读审查，避免误阻断正常命令或误放行危险命令。
+说明：这是权限策略示意，适合放在项目级 `.claude/settings.json` 中（团队共享）或用户级 `~/.claude/settings.json` 中（个人偏好）。具体字段和匹配方式应以当前 Claude Code 官方文档和本机版本为准。配置前先只读审查，避免误阻断正常命令或误放行危险命令。
 
 skill 草案：
 
@@ -179,6 +180,7 @@ markdown：
 ---
 name: review-diff
 description: 只读审查当前 git diff，重点检查安全风险、测试缺口和提交前问题。
+disable-model-invocation: true
 ---
 
 # Review Diff
@@ -226,7 +228,8 @@ json：
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'Review risky Bash commands before allowing execution.'"
+            "command": "echo 'Review risky Bash commands before allowing execution.'",
+            "timeout": 600
           }
         ]
       }
@@ -235,7 +238,7 @@ json：
 }
 ```
 
-说明：示例只做提示，不执行破坏性动作。真实项目中应让 hook 调用轻量、可审计、失败行为明确的脚本。
+说明：示例只做提示，不执行破坏性动作。真实项目中应让 hook 调用轻量、可审计、失败行为明确的脚本。常用生命周期事件：`PreToolUse`（工具调用前）、`PostToolUse`（工具调用后）、`Stop`（会话结束）、`SubagentStart`（子 Agent 启动）、`SubagentStop`（子 Agent 结束）。hook 退出码含义：0 = 通过，2 = 阻断，其他 = 非阻塞错误。
 
 MCP 安全接入清单：
 
@@ -247,6 +250,8 @@ MCP 接入前检查：
 - 是否使用最小权限账号。
 - 是否避免生产写权限。
 - 是否会读取密钥、用户隐私或商业敏感数据。
+- 是否需要 OAuth 认证或 API 密钥。
+- 是否需要调整 MCP 输出限制。
 - 是否有日志审计。
 - 是否能在项目级禁用。
 - 是否能限制到特定 Agent 使用。
@@ -315,7 +320,7 @@ Claude Code 对话输入：
 
 ## 验收标准
 
-完成本章后，你应该能够：
+学完本章，你应该能：
 
 - 区分 settings、commands / skills、hooks、MCP 的适用场景。
 - 判断配置应该放在用户级、项目级还是团队管理级。
