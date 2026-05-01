@@ -173,7 +173,7 @@ v.assign({7, 8, 9});
 ### 3.3 assign vs operator= 的区别
 
 ```
-vector<int> v1 = {1, 2, 3, 4, 5};
+vector<int> v1 = {1, 2, 3, 4 , 5};
 vector<int> v2 = {10, 20};
 
 // operator= 是整体赋值
