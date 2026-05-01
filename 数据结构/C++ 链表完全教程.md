@@ -1,887 +1,3227 @@
-# C++ 链表完全教程
+# C++ 链表（Linked List）完全教程
 
-> 从零基础到手写 `std::list`，为学习 STL `list` 容器打下坚实基础。
+> 从零基础到手写 std::list，为学习 STL list 容器打下坚实基础。
 
 ---
 
 ## 第一阶段：链表基础
 
+### 1. 为什么需要动态数据结构？—— 链表的动机
+
+#### 1.1 数组的局限性
+
+数组是 C++ 中最基础的数据结构，但它有几个根本性的限制，在某些场景下会带来严重问题。
+
+**问题一：必须预先确定大小**
+
+```cpp
+int arr[100];  // 必须在编译时确定大小
+```
+
+如果实际只存了 5 个元素，浪费了 95 个位置；如果需要存 101 个元素，直接越界。
+
+虽然 `std::vector` 能动态扩容，但扩容过程本身有代价：
+
+```cpp
+std::vector<int> v;
+// 当 v.size() == v.capacity() 时，push_back 触发扩容：
+// 1. 分配一块更大的新内存（通常是原来的 2 倍）
+// 2. 把所有旧元素复制到新内存
+// 3. 释放旧内存
+```
+
+假如 vector 当前容量为 1000，存了 1000 个元素，此时 push_back 一个新元素：
+- 分配 2000 大小的新数组
+- 复制 1000 个元素到新位置
+- 释放旧数组
+
+这次 push_back 的时间复杂度从均摊 O(1) 瞬间变成 O(n)，在实时系统中可能是不可接受的。
+
+**问题二：插入和删除需要移动大量元素**
+
+假设数组 `[10, 20, 30, 40, 50]`，要在位置 1（值 20 之前）插入 15：
+
+```cpp
+插入前: [10, 20, 30, 40, 50]
+         ^
+插入位置
+
+步骤: 先把 20, 30, 40, 50 全部后移一位
+      [10, __, 20, 30, 40, 50]
+      然后填入 15
+      [10, 15, 20, 30, 40, 50]
+```
+
+移动了 4 个元素。如果数组有 n 个元素，在头部插入需要移动全部 n 个元素，时间复杂度 O(n)。
+
+删除同理——删除位置 0 的元素后，剩余元素全部前移一位。
+
+#### 1.2 链表如何解决这些问题
+
+链表用完全不同的思路组织数据：
+
+- **动态增长**：每次添加一个节点就分配一块小内存，不需要预先知道总数。用多少分配多少，不会浪费也不会不够。
+- **插入/删除只需改指针**：假设已经拿到要操作位置的节点，插入或删除只需要修改一两个指针的指向，不需要移动其他任何元素，时间复杂度 O(1)。
+- **内存独立分配**：每个节点可以在内存中的任意位置，通过指针串联起来。
+
 ---
 
-### 1. 链表概述
+### 2. 链表概述
 
-#### 1.1 什么是链表？
+#### 2.1 什么是链表
 
-**链表（Linked List）** 是一种**线性数据结构**，它通过**指针**将一组零散的内存块（称为**节点**）串联起来，形成一个逻辑上连续的序列。
+链表是一种**线性数据结构**，由一系列节点组成，每个节点包含数据和指向下一个节点的指针。
 
-与数组不同，链表的每个元素**不要求在内存中连续存放**。每个节点除了存储数据本身，还要额外存储一个（或多个）指针，指向下一个（或上一个）节点。
+**核心概念：逻辑相邻不等于物理相邻。**
 
-形象地说：
+这是理解链表最重要的思想。在数组中，逻辑上的第 i 个元素和第 i+1 个元素在内存中也是相邻的；但在链表中，逻辑上相邻的两个节点在内存中可能相距很远。
 
-- **数组**像一排连续的储物柜，每个柜子紧挨着，通过编号直接找到。
-- **链表**像一条寻宝链条，每个宝箱里有一条线索，告诉你下一个宝箱在哪里。
+下面用 ASCII 图来对比两者的内存布局：
 
+**数组的内存布局：**
+
+```cpp
+    逻辑顺序:  10 --> 20 --> 30 --> 40 --> 50
+
+    内存地址（假设从 0x1000 开始，每个 int 占 4 字节）:
+
+    0x1000  0x1004  0x1008  0x100C  0x1010
+    +------+------+------+------+------+
+    |  10  |  20  |  30  |  40  |  50  |
+    +------+------+------+------+------+
+       ^                               ^
+       |                               |
+     首地址                          末地址
+
+    特点: 连续内存，地址依次递增，物理顺序 = 逻辑顺序
 ```
-数组（连续内存）:
-┌───┬───┬───┬───┬───┐
-│ 1 │ 2 │ 3 │ 4 │ 5 │
-└───┴───┴───┴───┴───┘
-  ↑ 起始地址，后续元素地址 = 起始 + index × sizeof(元素)
 
-链表（离散内存）:
-┌───┬───┐    ┌───┬───┐    ┌───┬────────┐
-│ 1 │  ─┼───>│ 2 │  ─┼───>│ 3 │ nullptr│
-└───┴───┘    └───┴───┘    └───┴────────┘
- data next    data next    data  next
+**链表的内存布局：**
+
+```cpp
+    逻辑顺序:  10 --> 20 --> 30 --> 40 --> 50
+
+    内存地址（每个节点在内存中的实际位置）:
+
+    节点 A (0x2000)        节点 C (0x1500)
+    +--------+------+      +--------+------+
+    | 10     |  ------->  | 30     |  -------> ...
+    +--------+------+      +--------+------+
+
+    节点 B (0x3A00)        节点 D (0x0800)        节点 E (0x2F00)
+    +--------+------+      +--------+------+      +--------+------+
+    | 20     |  ------->  | 40     |  ------->  | 50     | NULL |
+    +--------+------+      +--------+------+      +--------+------+
+
+    head
+     |
+     v
+    节点 A (0x2000) --> 节点 C (0x1500) --> 节点 B (0x3A00) --> 节点 D (0x0800) --> 节点 E (0x2F00) --> NULL
+
+    特点: 内存分散各处，靠指针串联，物理顺序 != 逻辑顺序
 ```
 
-#### 1.2 链表与数组的全方位对比
+可以看到，链表的节点散布在内存的不同角落。`head` 指针指向第一个节点，每个节点的 `next` 指针指向下一个节点，最后一个节点的 `next` 为 `NULL`，表示链表结束。
 
-| 特性          | 数组 array / vector                   | 链表 linked list             |
-| ------------- | ------------------------------------- | ---------------------------- |
-| 内存布局      | 连续                                  | 离散                         |
-| 随机访问      | ✅ O(1)，支持下标 []                   | ❌ O(n)，必须从头遍历         |
-| 头部插入/删除 | ❌ O(n)，需要移动后续元素              | ✅ O(1)，修改指针即可         |
-| 中间插入/删除 | ❌ O(n)                                | ✅ O(1)（已知位置时）         |
-| 尾部插入      | ✅ 均摊 O(1)（vector）                 | O(1)（维护尾指针时）         |
-| 查找元素      | O(n)（无序） / O(log n)（有序，二分） | O(n)，只能顺序查找           |
-| 内存开销      | 仅存数据，紧凑                        | 每个节点额外存储指针，开销大 |
-| 缓存友好性    | ✅ 极好，连续内存利于 CPU 缓存预取     | ❌ 差，节点散布在内存各处     |
-| 内存分配      | 一次性分配大块内存                    | 每个节点单独分配             |
-| 扩容方式      | 需要重新分配+拷贝（vector 翻倍策略）  | 天然支持动态增长             |
+#### 2.2 链表与数组的全方位对比表
 
-#### 1.3 链表的优缺点分析
+```cpp
++------------------+-----------------------------+-----------------------------+
+|     比较维度     |            数组             |            链表             |
++------------------+-----------------------------+-----------------------------+
+| 内存布局         | 连续内存块                  | 分散的内存块，靠指针串联    |
++------------------+-----------------------------+-----------------------------+
+| 随机访问         | 支持，O(1)                  | 不支持，必须从头遍历 O(n)   |
+|                  | arr[i] 直接算地址           |                              |
++------------------+-----------------------------+-----------------------------+
+| 插入（头部）     | O(n)，需要移动全部元素      | O(1)，修改 head 指针即可    |
++------------------+-----------------------------+-----------------------------+
+| 插入（中间）     | O(n)，需要移动后续元素      | O(1)，已知位置时改指针      |
+|                  |                             | （找位置仍需 O(n)）         |
++------------------+-----------------------------+-----------------------------+
+| 插入（尾部）     | O(1) 均摊（vector 可能扩容）| O(1) 若有尾指针，否则 O(n)  |
++------------------+-----------------------------+-----------------------------+
+| 删除             | O(n)，需要移动后续元素      | O(1)，已知位置时改指针      |
++------------------+-----------------------------+-----------------------------+
+| 内存开销         | 只存数据                    | 数据 + 指针（额外 8 字节/   |
+|                  |                             | 节点，64 位系统）           |
++------------------+-----------------------------+-----------------------------+
+| 缓存友好性       | 高（连续内存，CPU 缓存      | 低（内存分散，缓存命中率差）|
+|                  | 预取有效）                  |                              |
++------------------+-----------------------------+-----------------------------+
+| 内存分配方式     | 栈上或堆上分配一整块        | 每个节点单独 new 分配       |
++------------------+-----------------------------+-----------------------------+
+| 扩容             | 需要重新分配+复制           | 无需，用多少分配多少        |
++------------------+-----------------------------+-----------------------------+
+| 实现复杂度       | 简单                        | 较复杂，需管理指针          |
++------------------+-----------------------------+-----------------------------+
+```
+
+#### 2.3 链表的优缺点分析
 
 **优点：**
 
-- **动态大小**：无需预先确定大小，也不需要像 `vector` 那样在扩容时进行昂贵的内存重新分配和拷贝。
-- **插入/删除高效**：在已知位置的情况下，插入和删除操作只需修改指针，时间复杂度 O(1)。
-- **容量管理更弹性**：不需要像 `vector` 一样预留 capacity；但每个节点本身和分配器元数据仍有额外开销。
+1. **动态大小**：链表的长度可以在运行时任意增长或缩短，不需要预先指定大小，也不会浪费空间。
+2. **高效的插入/删除**：在已知位置的情况下，插入和删除操作只需修改指针，时间复杂度 O(1)。相比之下，数组在相同情况下需要移动大量元素。
+3. **不需要连续内存**：链表节点可以散布在内存各处，不会因为找不到大块连续内存而分配失败（内存碎片问题对数组影响更大）。
 
 **缺点：**
 
-- **不支持随机访问**：访问第 i 个元素必须从头遍历，时间复杂度 O(n)。
-- **额外的内存开销**：每个节点都需要额外存储指针（单链表 1 个指针，双向链表 2 个指针）。
-- **缓存不友好**：节点在堆上离散分配，容易导致 CPU 缓存缺失（cache miss），实际性能可能不如理论分析。
+1. **不支持随机访问**：要访问第 i 个元素，必须从 head 开始遍历 i 次，时间复杂度 O(n)。数组只需 `arr[i]`，O(1)。
+2. **额外内存开销**：每个节点除了存数据，还需要一个指针（64 位系统上占 8 字节）。如果数据本身很小（比如 int 只有 4 字节），指针的开销比例高达 200%。
+3. **缓存不友好**：CPU 缓存会预取连续内存，数组天然受益；链表节点分散在堆的各处，缓存命中率低，遍历速度可能比数组慢数倍。
+4. **容易出错**：手动管理指针容易产生内存泄漏、悬空指针、野指针等问题，调试困难。
 
-#### 1.4 链表的应用场景
+#### 2.4 链表的应用场景
 
-- **频繁在中间/头部做插入和删除**的场景（如文本编辑器的行缓冲区、LRU 缓存淘汰策略）。
-- **不确定数据规模**、但不需要随机访问的场景。
-- **操作系统内核**中大量使用链表管理进程、文件描述符、内存页等。
-- **STL 容器** `std::list` 和 `std::forward_list` 的底层实现。
-- **哈希表的链地址法**（每个桶挂一条链表解决冲突）。
+1. **频繁在头部或中间插入/删除的场景**：比如实现栈（push/pop 在头部）、任务队列。
+2. **无法预估数据量的场景**：比如实时接收数据流，不知道会有多少条数据到来。
+3. **实现其他数据结构**：栈、队列、哈希表的链地址法（解决哈希冲突）、图的邻接表表示。
+4. **操作系统的内存管理**：操作系统用链表管理空闲内存块。
+5. **浏览器的历史记录**：前进/后退功能可以用双向链表实现。
+6. **音乐播放器的播放列表**：上一首/下一首，双向链表天然适配。
 
 ---
 
-### 2. 节点（Node）的定义
+### 3. 节点（Node）的定义
 
-#### 2.1 数据域与指针域
+#### 3.1 数据域与指针域
 
-一个链表节点由两部分组成：
+链表的每个节点由两部分组成：
 
+```cpp
+    一个节点（Node）的结构:
+
+    +-------------------+
+    |     data 域       |   <-- 存储实际数据（比如一个整数）
+    |   （数据域）       |
+    +-------------------+
+    |     next 指针域    |   <-- 存储下一个节点的地址
+    |   （指针域）       |
+    +-------------------+
 ```
-┌──────────────────────┐
-│   数据域 (data)       │  ← 存储实际的数据
-├──────────────────────┤
-│   指针域 (next)       │  ← 指向下一个节点的指针
-└──────────────────────┘
+
+- **数据域（data）**：存储节点的实际数据。数据的类型可以是 int、double、string，甚至是另一个结构体。
+- **指针域（next）**：存储下一个节点的内存地址。如果是最后一个节点，next 为 `nullptr`（空指针），表示"没有下一个了"。
+
+一个完整的链表就是由若干个这样的节点串联而成：
+
+```cpp
+    head
+     |
+     v
+    +------+------+    +------+------+    +------+------+    +------+------+    +------+------+
+    |  10  | next | -> |  20  | next | -> |  30  | next | -> |  40  | next | -> |  50  | NULL |
+    +------+------+    +------+------+    +------+------+    +------+------+    +------+------+
 ```
 
-- **数据域（data field）**：存储节点承载的数据，可以是 `int`、`string` 或任意类型。
-- **指针域（pointer field）**：存储下一个节点的地址。当它为 `nullptr` 时，表示链表的结束。
+#### 3.2 用 struct 定义节点
 
-#### 2.2 用 struct 定义节点
+在 C++ 中，我们用 `struct` 来定义节点类型：
 
-在 C++ 中，使用 `struct` 来定义链表节点是最自然的做法：
-
-```
-// 单链表节点定义
-struct ListNode {
-    int data;           // 数据域
-    ListNode* next;     // 指针域：指向下一个节点
-
-    // 构造函数：方便创建节点时直接赋值
-    ListNode(int val) : data(val), next(nullptr) {}
+```cpp
+struct Node {
+    int data;       // 数据域，存储整数值
+    Node* next;     // 指针域，指向下一个 Node
+    Node(int val) : data(val), next(nullptr) {}
 };
 ```
 
-**为什么要写构造函数？**
+逐行解释：
 
-如果不写构造函数，每次创建节点都需要手动初始化：
+- `int data;` —— 数据域，类型为 `int`。你可以换成任何其他类型。
+- `Node* next;` —— 指针域，类型是 `Node*`，即"指向 Node 的指针"。这里 `Node` 在定义自身内部引用了自己，称为**自引用结构**，这在 C++ 中是合法的，因为 `Node*` 只是一个指针，编译器知道指针的大小。
+- `Node(int val) : data(val), next(nullptr) {}` —— 构造函数，用初始化列表的方式把 `data` 设为 `val`，`next` 设为 `nullptr`。这样创建节点时就自动初始化了，不会忘记设 next。
 
-```
-// 没有构造函数，繁琐且容易忘记初始化 next
-ListNode* node = new ListNode;
-node->data = 10;
-node->next = nullptr;  // 忘记这一步就是野指针！
+使用示例：
 
-// 有构造函数，一行搞定
-ListNode* node = new ListNode(10);  // data=10, next=nullptr
-```
-
-> **⚠️ 关键点**：未初始化指针属于**野指针（wild pointer）**；**悬垂指针（dangling pointer）** 是“曾经有效但所指对象已被释放”的指针。两者一旦解引用都会触发未定义行为。
-
-#### 2.3 节点的内存分配（new / delete）
-
-链表节点在**堆（heap）**上动态分配，使用 `new` 分配、`delete` 释放：
-
-```
-// 分配一个新节点
-ListNode* p = new ListNode(42);  
-// new 做了两件事：
-//   1. 在堆上分配 sizeof(ListNode) 字节的内存
-//   2. 调用构造函数 ListNode(42)，初始化 data=42, next=nullptr
-
-std::cout << p->data << std::endl;  // 42
-std::cout << p->next << std::endl;  // 0 (nullptr)
-
-// 使用完毕后，必须释放内存
-delete p;
-p = nullptr;  // 好习惯：释放后将指针置空，避免悬垂指针
+```cpp
+Node* n1 = new Node(10);  // 创建一个节点，data = 10, next = nullptr
+Node* n2 = new Node(20);  // 创建一个节点，data = 20, next = nullptr
+n1->next = n2;            // 把 n1 的 next 指向 n2
 ```
 
-**内存泄漏的危险：**
+此时内存中的状态：
 
-```
-void bad_example() {
-    ListNode* p = new ListNode(1);
-    ListNode* q = new ListNode(2);
-    p->next = q;
-    
-    // 函数结束时，p 和 q 这两个局部变量被销毁
-    // 但堆上的两个 ListNode 对象并没有被 delete！
-    // 这就是内存泄漏！
-}
-
-void good_example() {
-    ListNode* p = new ListNode(1);
-    ListNode* q = new ListNode(2);
-    p->next = q;
-    
-    // 正确释放：从头开始逐个删除
-    ListNode* curr = p;
-    while (curr != nullptr) {
-        ListNode* temp = curr->next;  // 先保存下一个节点
-        delete curr;                  // 再删除当前节点
-        curr = temp;                  // 移动到下一个
-    }
-}
+```cpp
+    n1                      n2
+     |                       |
+     v                       v
+    +------+------+         +------+------+
+    |  10  | next | ------> |  20  | NULL |
+    +------+------+         +------+------+
+    地址假设 0x1000          地址假设 0x2000
 ```
 
-> **📌 规则**：在这类“手写裸指针链表”里，每一个 `new` 最终都要被 `delete` 回收，否则就是内存泄漏。
+#### 3.3 节点的内存分配（new / delete）
+
+**创建节点用 new：**
+
+```cpp
+Node* newNode = new Node(42);
+```
+
+`new Node(42)` 做了两件事：
+1. 在堆（heap）上分配一块能容纳 `Node` 结构体的内存
+2. 调用构造函数，将 data 设为 42，next 设为 nullptr
+
+返回的是这块内存的地址，赋给指针 `newNode`。
+
+**销毁节点用 delete：**
+
+```cpp
+delete newNode;    // 释放这块内存
+newNode = nullptr; // 好习惯：delete 后置空指针，防止误用
+```
+
+`delete` 做了两件事：
+1. 调用对象的析构函数（Node 没有自定义析构函数，所以这步是空操作）
+2. 释放堆上的内存
+
+**内存泄漏警告：**
+
+```cpp
+Node* p = new Node(10);
+p = new Node(20);   // 危险！第一个节点的地址丢失了，内存泄漏！
+// 第一个节点占的内存再也无法释放，直到程序结束
+```
+
+正确做法：
+
+```cpp
+Node* p = new Node(10);
+delete p;            // 先释放旧节点
+p = new Node(20);    // 再分配新节点
+```
+
+在整个链表学习过程中，每 new 一个节点，最终都要对应 delete，这是 C++ 内存管理的基本纪律。
 
 ---
 
-## 第二阶段：单链表（Singly Linked List）
+## 第二阶段：单链表基本操作
+
+以下所有操作都基于这个 Node 定义和一个全局的 `head` 指针：
+
+```cpp
+struct Node {
+    int data;
+    Node* next;
+    Node(int val) : data(val), next(nullptr) {}
+};
+```
+
+`head` 指向链表的第一个节点，空链表时 `head == nullptr`。
 
 ---
 
-### 3. 单链表的创建与遍历
+### 4. 链表的显示与遍历
 
-#### 3.1 头指针（head pointer）的概念
+遍历是链表最基本的操作——沿着 next 指针从头走到尾，访问每一个节点。
 
-**头指针**是一个指向链表第一个节点的指针变量。通过头指针，我们可以访问整条链表。
+#### 4.1 迭代显示链表
 
-```
-ListNode* head = nullptr;  // 空链表：头指针为 nullptr
-```
+**概念解释：**
 
-```
-head ──> nullptr     （空链表）
+遍历链表需要一个"游标"指针，从 head 出发，每访问完一个节点就移动到下一个。关键原则：**绝不能用 head 直接遍历**，因为一旦 head 移动了，链表前面的节点就找不回来了（链表断掉了）。必须用一个临时指针 `curr`。
 
-head ──> [10|──>] ──> [20|──>] ──> [30|nullptr]
-          第1个节点    第2个节点     第3个节点（尾节点）
-```
+**思路分析：**
 
-> **注意**：头指针本身**不是**节点，它只是一个存储地址的指针变量。
+1. 创建临时指针 `curr`，指向 `head`
+2. 当 `curr` 不为 `nullptr` 时，循环：
+   - 打印 `curr->data`
+   - 将 `curr` 移动到 `curr->next`
+3. `curr` 为 `nullptr` 时，到达链表末尾，结束
 
-#### 3.2 头插法建表
+**代码实现：**
 
-**头插法**：每次将新节点插入到链表**头部**。特点是**后输入的数据在前面**（类似栈的 LIFO 行为）。
-
-```
-// 头插法建立链表
-// 输入：1 -> 2 -> 3
-// 结果：3 -> 2 -> 1
-ListNode* createListByHead(const std::vector<int>& arr) {
-    ListNode* head = nullptr;
-
-    for (int val : arr) {
-        ListNode* newNode = new ListNode(val);
-        newNode->next = head;  // 新节点的 next 指向原来的头
-        head = newNode;        // 更新头指针，指向新节点
+```cpp
+void display(Node* head) {
+    Node* curr = head;          // 临时指针，从 head 开始
+    while (curr != nullptr) {   // 还有节点没访问
+        std::cout << curr->data << " -> ";
+        curr = curr->next;      // 移动到下一个节点
     }
-
-    return head;
+    std::cout << "NULL" << std::endl;
 }
 ```
 
-**逐步图解（输入 1, 2, 3）：**
+**逐步图解：**
 
-```
-初始状态：  head -> nullptr
+假设链表如下：
 
-插入 1：    head -> [1|nullptr]
-
-插入 2：    head -> [2|──>] -> [1|nullptr]
-            新节点插在最前面
-
-插入 3：    head -> [3|──>] -> [2|──>] -> [1|nullptr]
-            最后插入的在最前面
-```
-
-#### 3.3 尾插法建表
-
-**尾插法**：每次将新节点插入到链表**尾部**。特点是**先输入的数据在前面**，保持原始顺序。
-
-```
-// 尾插法建立链表
-// 输入：1 -> 2 -> 3
-// 结果：1 -> 2 -> 3
-ListNode* createListByTail(const std::vector<int>& arr) {
-    ListNode* head = nullptr;
-    ListNode* tail = nullptr;  // 尾指针，始终指向最后一个节点
-
-    for (int val : arr) {
-        ListNode* newNode = new ListNode(val);
-
-        if (head == nullptr) {
-            // 链表为空，新节点既是头又是尾
-            head = newNode;
-            tail = newNode;
-        } else {
-            // 将新节点挂到尾部
-            tail->next = newNode;
-            tail = newNode;  // 更新尾指针
-        }
-    }
-
-    return head;
-}
+```cpp
+    head
+     |
+     v
+    +------+------+    +------+------+    +------+------+
+    |  10  | next | -> |  20  | next | -> |  30  | NULL |
+    +------+------+    +------+------+    +------+------+
 ```
 
-**逐步图解（输入 1, 2, 3）：**
+执行 `display(head)` 的过程：
 
+```cpp
+第 1 步: curr = head, curr->data = 10
+    head    curr
+     |       |
+     v       v
+    +------+------+    +------+------+    +------+------+
+    |  10  | next | -> |  20  | next | -> |  30  | NULL |
+    +------+------+    +------+------+    +------+------+
+    输出: "10 -> "
+    curr = curr->next (curr 移到第二个节点)
+
+第 2 步: curr 指向第二个节点, curr->data = 20
+    head              curr
+     |                 |
+     v                 v
+    +------+------+    +------+------+    +------+------+
+    |  10  | next | -> |  20  | next | -> |  30  | NULL |
+    +------+------+    +------+------+    +------+------+
+    输出: "10 -> 20 -> "
+    curr = curr->next
+
+第 3 步: curr 指向第三个节点, curr->data = 30
+    head                            curr
+     |                               |
+     v                               v
+    +------+------+    +------+------+    +------+------+
+    |  10  | next | -> |  20  | next | -> |  30  | NULL |
+    +------+------+    +------+------+    +------+------+
+    输出: "10 -> 20 -> 30 -> "
+    curr = curr->next
+
+第 4 步: curr = nullptr, 循环结束
+    输出: "10 -> 20 -> 30 -> NULL"
 ```
-初始状态：  head -> nullptr, tail -> nullptr
 
-插入 1：    head -> [1|nullptr]
-            tail ──────↑
+注意：整个过程中 `head` 始终没有移动，链表结构完好无损。
 
-插入 2：    head -> [1|──>] -> [2|nullptr]
-            tail ────────────────↑
+**完整可运行示例：**
 
-插入 3：    head -> [1|──>] -> [2|──>] -> [3|nullptr]
-            tail ──────────────────────────↑
-```
+```cpp
+#include <iostream>
 
-#### 3.4 遍历与打印链表
+struct Node {
+    int data;
+    Node* next;
+    Node(int val) : data(val), next(nullptr) {}
+};
 
-遍历链表的核心思想：从头指针开始，沿着 `next` 指针逐个访问节点，直到遇到 `nullptr`。
-
-```
-void printList(ListNode* head) {
-    ListNode* curr = head;  // 用一个临时指针遍历，不要修改 head！
+void display(Node* head) {
+    Node* curr = head;
     while (curr != nullptr) {
-        std::cout << curr->data;
-        if (curr->next != nullptr) {
-            std::cout << " -> ";
-        }
-        curr = curr->next;  // 移动到下一个节点
+        std::cout << curr->data << " -> ";
+        curr = curr->next;
     }
-    std::cout << std::endl;
+    std::cout << "NULL" << std::endl;
 }
 
-// 使用示例
-ListNode* list = createListByTail({1, 2, 3, 4, 5});
-printList(list);  // 输出：1 -> 2 -> 3 -> 4 -> 5
+int main() {
+    // 手动构建链表: 10 -> 20 -> 30 -> NULL
+    Node* head = new Node(10);
+    head->next = new Node(20);
+    head->next->next = new Node(30);
+
+    display(head);  // 输出: 10 -> 20 -> 30 -> NULL
+
+    // 释放内存
+    Node* curr = head;
+    while (curr != nullptr) {
+        Node* temp = curr;
+        curr = curr->next;
+        delete temp;
+    }
+
+    return 0;
+}
 ```
 
-> **⚠️ 初学者常见错误**：用 `head` 直接遍历，遍历完后 `head` 变成了 `nullptr`，链表"丢了"！一定要用一个**临时指针** `curr`。
+**复杂度分析：**
+- 时间复杂度：O(n)，需要遍历所有 n 个节点
+- 空间复杂度：O(1)，只用了一个额外的指针 `curr`
+
+#### 4.2 链表的递归显示
+
+**概念解释：**
+
+递归是一种函数调用自身的编程技巧。用递归遍历链表的思路是：先处理当前节点，再递归处理剩余链表。
+
+**思路分析：**
+
+递归的两个要素：
+1. **基准情况（base case）**：`curr == nullptr`，什么都不做，返回
+2. **递归情况**：打印当前节点数据，然后对 `curr->next` 递归调用
+
+**代码实现：**
+
+```cpp
+void displayRecursive(Node* curr) {
+    if (curr == nullptr) {  // 基准情况：空链表，结束
+        std::cout << "NULL" << std::endl;
+        return;
+    }
+    std::cout << curr->data << " -> ";   // 处理当前节点
+    displayRecursive(curr->next);         // 递归处理剩余链表
+}
+```
+
+**逐步图解（调用栈展开）：**
+
+假设链表 `10 -> 20 -> 30 -> NULL`：
+
+```cpp
+调用 displayRecursive(node_10)
+  打印 "10 -> "
+  调用 displayRecursive(node_20)
+    打印 "20 -> "
+    调用 displayRecursive(node_30)
+      打印 "30 -> "
+      调用 displayRecursive(nullptr)
+        打印 "NULL"
+        return
+      return        <-- node_30 的调用结束
+    return          <-- node_20 的调用结束
+  return            <-- node_10 的调用结束
+```
+
+用调用栈的视角来看（栈从下往上增长）：
+
+```cpp
+调用 displayRecursive(node_10):
++------------------------+
+| curr = node_10         |  打印 "10 -> "，然后调用下一层
++------------------------+
+
+调用 displayRecursive(node_20):
++------------------------+
+| curr = node_20         |  打印 "20 -> "，然后调用下一层
++------------------------+
+| curr = node_10         |
++------------------------+
+
+调用 displayRecursive(node_30):
++------------------------+
+| curr = node_30         |  打印 "30 -> "，然后调用下一层
++------------------------+
+| curr = node_20         |
++------------------------+
+| curr = node_10         |
++------------------------+
+
+调用 displayRecursive(nullptr):
++------------------------+
+| curr = nullptr         |  打印 "NULL"，return
++------------------------+
+| curr = node_30         |
++------------------------+
+| curr = node_20         |
++------------------------+
+| curr = node_10         |
++------------------------+
+
+然后逐层 return，栈帧依次弹出
+```
+
+**复杂度分析：**
+- 时间复杂度：O(n)
+- 空间复杂度：O(n)，因为递归调用栈的深度等于链表长度。如果链表很长（比如上万个节点），可能导致栈溢出（stack overflow）。这是递归版本的缺点。
+
+#### 4.3 链表的反向递归显示
+
+**概念解释：**
+
+正序递归是"先处理当前，再递归后面"。反向递归则反过来——先递归到链表末尾，然后在回溯过程中打印。这本质上就是**后序遍历**的思想。
+
+**思路分析：**
+
+1. 先递归调用 `displayReverse(curr->next)`，一路深入到链表末尾
+2. 到达 `nullptr` 后开始回溯
+3. 回溯时再打印当前节点的数据
+
+**代码实现：**
+
+```cpp
+void displayReverse(Node* curr) {
+    if (curr == nullptr) {  // 基准情况
+        return;
+    }
+    displayReverse(curr->next);          // 先递归到末尾
+    std::cout << curr->data << " -> ";   // 回溯时再打印
+}
+```
+
+**逐步图解（调用栈展开）：**
+
+```cpp
+调用 displayReverse(node_10)
+  调用 displayReverse(node_20)       <-- 还没打印，先往下递归
+    调用 displayReverse(node_30)     <-- 还没打印，先往下递归
+      调用 displayReverse(nullptr)   <-- 到达末尾，return
+      return
+    打印 "30 -> "                    <-- 回溯时才打印
+    return
+  打印 "20 -> "                      <-- 回溯时才打印
+  return
+打印 "10 -> "                        <-- 最后打印第一个节点
+```
+
+用栈帧图更清晰地展示回溯过程：
+
+```cpp
+=== 递归深入阶段（一路调用，不打印）===
+
+栈底                                                          栈顶
++-----------+-----------+-----------+-----------+
+| node_10   | node_20   | node_30   | nullptr   |
++-----------+-----------+-----------+-----------+
+  还没打印     还没打印     还没打印     return
+
+=== 回溯阶段（逐层返回，每层打印）===
+
+栈底                                    栈顶
++-----------+-----------+-----------+
+| node_10   | node_20   | node_30   |   <-- node_30 打印 "30 -> "，return
++-----------+-----------+-----------+
+
+栈底                      栈顶
++-----------+-----------+
+| node_10   | node_20   |           <-- node_20 打印 "20 -> "，return
++-----------+-----------+
+
+栈底        栈顶
++-----------+
+| node_10   |                       <-- node_10 打印 "10 -> "，return
++-----------+
+
+最终输出: "30 -> 20 -> 10 -> "
+```
+
+这就是后序遍历的精髓：递归深入到底，然后在回溯时处理。链表天然就是一种特殊的树（每个节点只有一个子节点），所以树的遍历思想完全适用。
+
+**复杂度分析：**
+- 时间复杂度：O(n)
+- 空间复杂度：O(n)，递归栈深度等于链表长度
 
 ---
 
-### 4. 单链表的基本操作
+### 5. 链表的统计操作
 
-#### 4.1 按位置查找
+#### 5.1 计算链表节点数（迭代法）
 
-查找链表中第 `index` 个节点（0-indexed）。
+**概念解释：**
 
-```
-// 返回第 index 个节点的指针（从 0 开始计数）
-// 找不到返回 nullptr
-ListNode* getNodeAt(ListNode* head, int index) {
-    if (index < 0) return nullptr;
+统计节点数就是从头到尾走一遍，每经过一个节点计数器加一。
 
-    ListNode* curr = head;
-    for (int i = 0; i < index && curr != nullptr; ++i) {
-        curr = curr->next;
-    }
-    return curr;  // 如果 index 越界，curr 已经是 nullptr
-}
+**思路分析：**
 
-// 使用示例
-// 链表：10 -> 20 -> 30 -> 40
-ListNode* node = getNodeAt(head, 2);  // 返回指向 30 的指针
-if (node) {
-    std::cout << node->data << std::endl;  // 30
-}
-```
+1. 创建计数器 `count = 0`
+2. 创建临时指针 `curr = head`
+3. 遍历链表，每经过一个节点 `count++`
+4. 返回 `count`
 
-#### 4.2 按值查找
+**代码实现：**
 
-查找第一个值为 `target` 的节点。
-
-```
-// 按值查找，返回第一个匹配的节点指针
-ListNode* findNode(ListNode* head, int target) {
-    ListNode* curr = head;
-    while (curr != nullptr) {
-        if (curr->data == target) {
-            return curr;  // 找到了
-        }
-        curr = curr->next;
-    }
-    return nullptr;  // 没找到
-}
-
-// 也可以返回位置索引
-int findIndex(ListNode* head, int target) {
-    ListNode* curr = head;
-    int index = 0;
-    while (curr != nullptr) {
-        if (curr->data == target) {
-            return index;
-        }
-        curr = curr->next;
-        ++index;
-    }
-    return -1;  // 没找到
-}
-```
-
-#### 4.3 指定位置插入节点
-
-在链表的第 `index` 个位置**之前**插入新节点：
-
-```
-// 在第 index 个位置插入新节点（0-indexed）
-// 返回新的头指针（因为头部插入时头指针会改变）
-ListNode* insertAt(ListNode* head, int index, int val) {
-    ListNode* newNode = new ListNode(val);
-
-    // 特殊情况：在头部插入（index == 0）
-    if (index == 0) {
-        newNode->next = head;
-        return newNode;  // 新节点成为新的头
-    }
-
-    // 找到第 index-1 个节点（即插入位置的前驱节点）
-    ListNode* prev = getNodeAt(head, index - 1);
-    if (prev == nullptr) {
-        // index 越界，插入失败
-        delete newNode;
-        std::cout << "插入位置无效！" << std::endl;
-        return head;
-    }
-
-    // 执行插入：
-    //   prev -> [某节点]
-    //   变为：prev -> [newNode] -> [某节点]
-    newNode->next = prev->next;
-    prev->next = newNode;
-
-    return head;
-}
-```
-
-**图解插入过程（在位置 2 插入 25）：**
-
-```
-原链表：   head -> [10] -> [20] -> [30] -> [40] -> nullptr
-                            ↑ prev（index-1 = 1 号节点）
-
-步骤1：newNode->next = prev->next
-           [25] ──> [30]
-
-步骤2：prev->next = newNode
-           [20] ──> [25]
-
-结果：     head -> [10] -> [20] -> [25] -> [30] -> [40] -> nullptr
-```
-
-> **⚠️ 关键**：步骤 1 和步骤 2 的顺序**不能颠倒**！如果先执行 `prev->next = newNode`，那原来 `prev->next` 指向的节点就丢失了。
-
-#### 4.4 删除指定节点
-
-删除链表中第 `index` 个节点：
-
-```
-// 删除第 index 个节点（0-indexed）
-// 返回新的头指针
-ListNode* deleteAt(ListNode* head, int index) {
-    if (head == nullptr) return nullptr;
-
-    // 特殊情况：删除头节点
-    if (index == 0) {
-        ListNode* newHead = head->next;
-        delete head;
-        return newHead;
-    }
-
-    // 找到第 index-1 个节点（前驱节点）
-    ListNode* prev = getNodeAt(head, index - 1);
-    if (prev == nullptr || prev->next == nullptr) {
-        std::cout << "删除位置无效！" << std::endl;
-        return head;
-    }
-
-    // 执行删除
-    ListNode* toDelete = prev->next;
-    prev->next = toDelete->next;  // 跳过被删除的节点
-    delete toDelete;              // 释放内存
-
-    return head;
-}
-```
-
-**图解删除过程（删除位置 2 的节点）：**
-
-```
-原链表：   head -> [10] -> [20] -> [30] -> [40] -> nullptr
-                            ↑ prev    ↑ toDelete
-
-步骤1：prev->next = toDelete->next
-           [20] ──────────────────> [40]
-
-步骤2：delete toDelete
-           [30] 被释放
-
-结果：     head -> [10] -> [20] -> [40] -> nullptr
-```
-
-#### 4.5 按值删除节点
-
-删除链表中第一个值为 `target` 的节点：
-
-```
-ListNode* deleteByValue(ListNode* head, int target) {
-    if (head == nullptr) return nullptr;
-
-    // 特殊情况：头节点就是目标
-    if (head->data == target) {
-        ListNode* newHead = head->next;
-        delete head;
-        return newHead;
-    }
-
-    // 查找目标节点的前驱
-    ListNode* prev = head;
-    while (prev->next != nullptr && prev->next->data != target) {
-        prev = prev->next;
-    }
-
-    if (prev->next == nullptr) {
-        std::cout << "未找到值为 " << target << " 的节点" << std::endl;
-        return head;
-    }
-
-    ListNode* toDelete = prev->next;
-    prev->next = toDelete->next;
-    delete toDelete;
-
-    return head;
-}
-```
-
-#### 4.6 求链表长度
-
-```
-int getLength(ListNode* head) {
+```cpp
+int countNodes(Node* head) {
     int count = 0;
-    ListNode* curr = head;
+    Node* curr = head;
     while (curr != nullptr) {
-        ++count;
+        count++;
         curr = curr->next;
     }
     return count;
 }
 ```
 
----
+**逐步图解：**
 
-### 5. 带头节点 vs 不带头节点
+```cpp
+链表: 10 -> 20 -> 30 -> NULL
 
-#### 5.1 什么是哨兵节点（Dummy Head）？
+第 1 步: curr = node_10, count = 0 + 1 = 1
+    curr
+     |
+     v
+    +------+------+    +------+------+    +------+------+
+    |  10  | next | -> |  20  | next | -> |  30  | NULL |
+    +------+------+    +------+------+    +------+------+
 
-**哨兵节点**（也叫虚拟头节点、Dummy Head）是一个**不存储有效数据**的额外节点，放在链表的最前面。它的 `next` 指向真正的第一个数据节点。
+第 2 步: curr = node_20, count = 1 + 1 = 2
+                 curr
+                  |
+                  v
+    +------+------+    +------+------+    +------+------+
+    |  10  | next | -> |  20  | next | -> |  30  | NULL |
+    +------+------+    +------+------+    +------+------+
 
+第 3 步: curr = node_30, count = 2 + 1 = 3
+                                  curr
+                                   |
+                                   v
+    +------+------+    +------+------+    +------+------+
+    |  10  | next | -> |  20  | next | -> |  30  | NULL |
+    +------+------+    +------+------+    +------+------+
+
+第 4 步: curr = nullptr, 循环结束，返回 count = 3
 ```
-不带头节点：
-head -> [10] -> [20] -> [30] -> nullptr
-         ↑ 第一个数据节点
 
-带头节点（哨兵节点）：
-head -> [dummy] -> [10] -> [20] -> [30] -> nullptr
-         ↑ 哨兵节点    ↑ 第一个数据节点
-         不存储有效数据
-```
+**复杂度分析：**
+- 时间复杂度：O(n)
+- 空间复杂度：O(1)
 
-#### 5.2 为什么需要哨兵节点？
+#### 5.2 计算链表节点数（递归法）
 
-**核心动机：消除对"头节点"的特殊处理。**
+**概念解释：**
 
-回顾前面的插入和删除操作，我们每次都需要单独处理 `index == 0` 的情况（即操作头节点时），因为头节点没有前驱节点。
+递归思路：链表的节点数 = 1 + 剩余链表的节点数。基准情况：空链表节点数为 0。
 
-**不带头节点的插入——需要特殊处理头部：**
+**代码实现：**
 
-```
-ListNode* insertAt(ListNode* head, int index, int val) {
-    ListNode* newNode = new ListNode(val);
-    
-    if (index == 0) {           // ← 特殊处理！
-        newNode->next = head;
-        return newNode;         // ← 头指针改变了！
+```cpp
+int countNodesRecursive(Node* curr) {
+    if (curr == nullptr) {  // 基准情况：空链表
+        return 0;
     }
-    
-    ListNode* prev = getNodeAt(head, index - 1);
-    newNode->next = prev->next;
-    prev->next = newNode;
-    return head;
+    return 1 + countNodesRecursive(curr->next);  // 1 + 剩余节点数
 }
 ```
 
-**带头节点的插入——所有位置统一处理：**
+**逐步图解（递归展开）：**
 
-```
-// dummyHead 是哨兵节点，永远不会被删除
-// 返回是否插入成功：index 必须在 [0, length] 内
-bool insertAt(ListNode* dummyHead, int index, int val) {
-    if (index < 0) return false;
+```cpp
+链表: 10 -> 20 -> 30 -> NULL
 
-    // 统一逻辑：找到第 index 个位置的前驱节点
-    // 当 index == 0 时，前驱就是 dummyHead 本身
-    ListNode* prev = dummyHead;
-    for (int i = 0; i < index; ++i) {
-        if (prev->next == nullptr) return false;  // 越界
-        prev = prev->next;
-    }
-
-    ListNode* newNode = new ListNode(val);
-    newNode->next = prev->next;
-    prev->next = newNode;
-    return true;
-    // 注意：不需要返回新的头指针，因为 dummyHead 始终是入口
-}
+countNodesRecursive(node_10)
+= 1 + countNodesRecursive(node_20)
+= 1 + (1 + countNodesRecursive(node_30))
+= 1 + (1 + (1 + countNodesRecursive(nullptr)))
+= 1 + (1 + (1 + 0))
+= 1 + (1 + 1)
+= 1 + 2
+= 3
 ```
 
-#### 5.3 两种方式的对比
+用树形图表示更直观：
 
-| 特性          | 不带头节点                   | 带头节点（哨兵）           |
-| ------------- | ---------------------------- | -------------------------- |
-| 插入/删除头部 | 需要特殊处理，头指针可能改变 | 统一逻辑，无需特殊处理     |
-| 函数返回值    | 通常需要返回新的头指针       | 不需要，dummyHead 固定     |
-| 空链表表示    | head == nullptr              | dummyHead->next == nullptr |
-| 代码简洁度    | 略复杂（多个 if 分支）       | 更简洁、更统一             |
-| 额外内存      | 无                           | 多一个节点的空间           |
-| STL list 采用 | —                            | ✅ std::list 使用哨兵节点   |
+```cpp
+                        countNodes(node_10)
+                       /                    \
+                     1                   countNodes(node_20)
+                                        /                    \
+                                      1                   countNodes(node_30)
+                                                         /                    \
+                                                       1                   countNodes(nullptr)
+                                                                            = 0
 
-> **📌 建议**：在实际项目和面试中，带哨兵节点的写法通常更受青睐，因为代码更简洁、更不容易出 bug。
-
-**完整的带哨兵节点示例：**
-
+自底向上计算: 0 -> 1+0=1 -> 1+1=2 -> 1+2=3
 ```
-// 创建带哨兵的链表
-ListNode* createWithDummy(const std::vector<int>& arr) {
-    ListNode* dummy = new ListNode(0);  // 哨兵节点，data 值无意义
-    ListNode* tail = dummy;
 
-    for (int val : arr) {
-        tail->next = new ListNode(val);
-        tail = tail->next;
-    }
+**复杂度分析：**
+- 时间复杂度：O(n)
+- 空间复杂度：O(n)，递归栈深度
 
-    return dummy;  // 返回哨兵节点
-    // 第一个数据节点是 dummy->next
-}
+#### 5.3 链表所有元素求和（迭代 + 递归）
 
-// 遍历时跳过哨兵
-void printList(ListNode* dummy) {
-    ListNode* curr = dummy->next;  // 从第一个数据节点开始
+**概念解释：**
+
+与计数类似，遍历链表，把每个节点的 data 加起来。
+
+**迭代版本：**
+
+```cpp
+int sumIterative(Node* head) {
+    int total = 0;
+    Node* curr = head;
     while (curr != nullptr) {
-        std::cout << curr->data << " ";
+        total += curr->data;    // 把当前节点的值累加
         curr = curr->next;
     }
-    std::cout << std::endl;
-}
-
-// 统一的删除操作
-// 返回是否删除成功：index 必须在 [0, length-1] 内
-bool deleteAt(ListNode* dummy, int index) {
-    if (index < 0) return false;
-
-    ListNode* prev = dummy;
-    for (int i = 0; i < index; ++i) {
-        if (prev->next == nullptr) return false;  // 越界
-        prev = prev->next;
-    }
-    if (prev->next == nullptr) return false;      // index == length，越界
-
-    ListNode* toDelete = prev->next;
-    prev->next = toDelete->next;
-    delete toDelete;
-    return true;
+    return total;
 }
 ```
+
+**递归版本：**
+
+```cpp
+int sumRecursive(Node* curr) {
+    if (curr == nullptr) {
+        return 0;
+    }
+    return curr->data + sumRecursive(curr->next);
+}
+```
+
+**逐步图解（递归版本）：**
+
+```cpp
+链表: 10 -> 20 -> 30 -> NULL
+
+sumRecursive(node_10)
+= 10 + sumRecursive(node_20)
+= 10 + (20 + sumRecursive(node_30))
+= 10 + (20 + (30 + sumRecursive(nullptr)))
+= 10 + (20 + (30 + 0))
+= 10 + (20 + 30)
+= 10 + 50
+= 60
+```
+
+**复杂度分析：**
+- 时间复杂度：O(n)
+- 空间复杂度：迭代版 O(1)，递归版 O(n)
+
+#### 5.4 链表中的最大元素（迭代 + 递归）
+
+**概念解释：**
+
+遍历链表，维护一个当前最大值。需要特别注意**空链表**的情况——空链表没有最大值，必须特殊处理。
+
+**迭代版本：**
+
+```cpp
+int findMax(Node* head) {
+    if (head == nullptr) {
+        // 空链表，没有最大值。这里用 INT_MIN 作为哨兵值。
+        // 实际项目中，抛异常或返回 optional<int> 更安全。
+        return INT_MIN;
+    }
+    int maxVal = head->data;    // 先假设第一个节点的值最大
+    Node* curr = head->next;    // 从第二个节点开始比较
+    while (curr != nullptr) {
+        if (curr->data > maxVal) {
+            maxVal = curr->data;  // 发现更大的值，更新
+        }
+        curr = curr->next;
+    }
+    return maxVal;
+}
+```
+
+注意：需要 `#include <climits>` 才能使用 `INT_MIN`。
+
+**递归版本：**
+
+```cpp
+int findMaxRecursive(Node* curr) {
+    if (curr == nullptr) {
+        return INT_MIN;  // 基准情况：空节点返回最小整数
+    }
+    int restMax = findMaxRecursive(curr->next);  // 后面节点的最大值
+    // 返回当前节点的值 和 后续最大值 中更大的那个
+    return (curr->data > restMax) ? curr->data : restMax;
+}
+```
+
+**逐步图解（迭代版本）：**
+
+```cpp
+链表: 5 -> 20 -> 15 -> 30 -> 10 -> NULL
+
+初始: maxVal = 5 (第一个节点的值)
+
+第 1 步: curr = node_20, data = 20
+    20 > 5?  是 -> maxVal = 20
+
+第 2 步: curr = node_15, data = 15
+    15 > 20? 否 -> maxVal 不变 (仍为 20)
+
+第 3 步: curr = node_30, data = 30
+    30 > 20? 是 -> maxVal = 30
+
+第 4 步: curr = node_10, data = 10
+    10 > 30? 否 -> maxVal 不变 (仍为 30)
+
+第 5 步: curr = nullptr, 循环结束
+
+返回 maxVal = 30
+```
+
+**逐步图解（递归版本，回溯求最大值的过程）：**
+
+```cpp
+findMax(node_5)
+= max(5, findMax(node_20))
+= max(5, max(20, findMax(node_15)))
+= max(5, max(20, max(15, findMax(node_30))))
+= max(5, max(20, max(15, max(30, findMax(node_10)))))
+= max(5, max(20, max(15, max(30, max(10, findMax(nullptr))))))
+= max(5, max(20, max(15, max(30, max(10, INT_MIN)))))
+                                     ^^^^^^^^^^^^^^^^^^
+                                     max(10, INT_MIN) = 10
+= max(5, max(20, max(15, max(30, 10))))
+                           ^^^^^^^^^^^^
+                           max(30, 10) = 30
+= max(5, max(20, max(15, 30)))
+                  ^^^^^^^^^^^^
+                  max(15, 30) = 30
+= max(5, max(20, 30))
+           ^^^^^^^^^^
+           max(20, 30) = 30
+= max(5, 30)
+= 30
+```
+
+**复杂度分析：**
+- 时间复杂度：O(n)
+- 空间复杂度：迭代版 O(1)，递归版 O(n)
 
 ---
 
-### 6. 单链表的进阶操作
+### 6. 链表中的搜索
 
-#### 6.1 链表反转
+#### 6.1 线性搜索（迭代法）
 
-**将链表 1->2->3->4->5 反转为 5->4->3->2->1。**
+**概念解释：**
 
-这是面试高频题，有两种经典方法：
+在链表中搜索某个值，只能从头开始逐个比较，因为链表不支持随机访问。这叫**线性搜索**。
 
-**方法一：迭代法（推荐）**
+**思路分析：**
 
-核心思想：遍历链表，将每个节点的 `next` 指针反转，指向前一个节点。
+1. 从 head 开始遍历
+2. 每访问一个节点，比较其 data 是否等于目标值
+3. 找到了返回该节点的指针（或位置），没找到返回 nullptr
 
-```
-ListNode* reverseList(ListNode* head) {
-    ListNode* prev = nullptr;
-    ListNode* curr = head;
+**代码实现：**
 
+```cpp
+Node* search(Node* head, int key) {
+    Node* curr = head;
     while (curr != nullptr) {
-        ListNode* nextTemp = curr->next;  // 先保存下一个节点
-        curr->next = prev;               // 反转指针方向
-        prev = curr;                     // prev 向前移动
-        curr = nextTemp;                 // curr 向前移动
+        if (curr->data == key) {
+            return curr;       // 找到了，返回节点指针
+        }
+        curr = curr->next;
     }
-
-    return prev;  // prev 现在是新的头节点
+    return nullptr;            // 遍历完都没找到
 }
 ```
 
 **逐步图解：**
 
+```cpp
+链表: 10 -> 20 -> 30 -> 40 -> NULL
+搜索 key = 30
+
+第 1 步: curr = node_10, data = 10, 10 == 30? 否
+    curr
+     |
+     v
+    +------+------+    +------+------+    +------+------+    +------+------+
+    |  10  | next | -> |  20  | next | -> |  30  | next | -> |  40  | NULL |
+    +------+------+    +------+------+    +------+------+    +------+------+
+
+第 2 步: curr = node_20, data = 20, 20 == 30? 否
+                 curr
+                  |
+                  v
+    +------+------+    +------+------+    +------+------+    +------+------+
+    |  10  | next | -> |  20  | next | -> |  30  | next | -> |  40  | NULL |
+    +------+------+    +------+------+    +------+------+    +------+------+
+
+第 3 步: curr = node_30, data = 30, 30 == 30? 是！返回 node_30 的指针
+                                  curr
+                                   |
+                                   v
+    +------+------+    +------+------+    +------+------+    +------+------+
+    |  10  | next | -> |  20  | next | -> |  30  | next | -> |  40  | NULL |
+    +------+------+    +------+------+    +------+------+    +------+------+
+    找到！返回 curr
 ```
-初始：  nullptr   1 -> 2 -> 3 -> nullptr
-         prev   curr
 
-第1步：  nullptr <- 1    2 -> 3 -> nullptr
-                  prev  curr
+**复杂度分析：**
+- 时间复杂度：O(n)，最坏情况（目标在末尾或不存在）需要遍历全部节点
+- 空间复杂度：O(1)
 
-第2步：  nullptr <- 1 <- 2    3 -> nullptr
-                        prev  curr
+#### 6.2 线性搜索（递归法）
 
-第3步：  nullptr <- 1 <- 2 <- 3
-                             prev  curr(nullptr)
+**代码实现：**
 
-结束：返回 prev，即 3（新的头节点）
-结果：  3 -> 2 -> 1 -> nullptr
+```cpp
+Node* searchRecursive(Node* curr, int key) {
+    if (curr == nullptr) {          // 基准情况：没找到
+        return nullptr;
+    }
+    if (curr->data == key) {        // 找到了
+        return curr;
+    }
+    return searchRecursive(curr->next, key);  // 继续在剩余链表中搜索
+}
 ```
 
-**方法二：递归法**
+**逐步图解：**
 
+```cpp
+链表: 10 -> 20 -> 30 -> 40 -> NULL
+搜索 key = 30
+
+searchRecursive(node_10, 30)
+  10 == 30? 否
+  return searchRecursive(node_20, 30)
+    20 == 30? 否
+    return searchRecursive(node_30, 30)
+      30 == 30? 是！
+      return node_30
+    return node_30   <-- 逐层返回同一个指针
+  return node_30
 ```
-ListNode* reverseList(ListNode* head) {
-    // 基线条件：空链表或只有一个节点
+
+**复杂度分析：**
+- 时间复杂度：O(n)
+- 空间复杂度：O(n)，递归栈深度
+
+#### 6.3 改进搜索——移至头部法（Move to Head）
+
+**概念解释：**
+
+如果链表中某个元素被反复搜索，每次都从头遍历效率很低。移至头部法的核心思想是：**每次找到一个节点后，把它移到链表头部**。这样下次搜索同一个元素时，第一次就找到了。
+
+这利用了**时间局部性**原理——刚被访问过的数据很可能很快又被访问。
+
+**思路分析：**
+
+1. 搜索目标 key
+2. 如果找到了（且不是头节点），将其从原位置摘除
+3. 将其插入到链表头部
+4. 更新 head 指针
+
+**代码实现：**
+
+```cpp
+Node* moveToHead(Node* head, int key) {
+    if (head == nullptr || head->data == key) {
+        return head;  // 空链表或已在头部，无需操作
+    }
+
+    Node* prev = nullptr;   // 记录 curr 的前一个节点
+    Node* curr = head;
+
+    // 查找 key
+    while (curr != nullptr && curr->data != key) {
+        prev = curr;
+        curr = curr->next;
+    }
+
+    if (curr == nullptr) {
+        return head;  // 没找到，返回原 head
+    }
+
+    // 把 curr 从原位置摘除
+    prev->next = curr->next;
+
+    // 把 curr 插入到头部
+    curr->next = head;
+    head = curr;
+
+    return head;  // 返回新的 head
+}
+```
+
+**逐步图解：**
+
+假设链表 `10 -> 20 -> 30 -> 40 -> NULL`，搜索 key = 30：
+
+```cpp
+原始链表:
+    head
+     |
+     v
+    +------+------+    +------+------+    +------+------+    +------+------+
+    |  10  | next | -> |  20  | next | -> |  30  | next | -> |  40  | NULL |
+    +------+------+    +------+------+    +------+------+    +------+------+
+    prev              curr
+                      (找到 30，curr 指向 node_30，prev 指向 node_20)
+
+步骤 1: 摘除 node_30（让 node_20 的 next 跳过 node_30，直接指向 node_40）
+
+    head
+     |
+     v
+    +------+------+    +------+------+              +------+------+
+    |  10  | next | -> |  20  | next | -----------> |  40  | NULL |
+    +------+------+    +------+------+              +------+------+
+
+                                  +------+------+
+    curr ------->                 |  30  | next |   (暂时是孤立节点)
+                                  +------+------+
+
+步骤 2: 把 node_30 插入到头部
+
+                                  +------+------+
+    curr ------->                 |  30  | next | -+
+                                  +------+------+  |
+                                        ^          |
+                                        |          v
+    head                               head
+     |                                  |
+     +----------+                       |
+                |                       |
+                v                       v
+    +------+------+    +------+------+    +------+------+
+    |  10  | next | -> |  20  | next | -> |  40  | NULL |
+    +------+------+    +------+------+    +------+------+
+
+    等一下，上面画的太复杂了。简化表示：
+
+步骤 2 之后:
+    head
+     |
+     v
+    +------+------+    +------+------+    +------+------+    +------+------+
+    |  30  | next | -> |  10  | next | -> |  20  | next | -> |  40  | NULL |
+    +------+------+    +------+------+    +------+------+    +------+------+
+
+    30 被移到了头部！
+```
+
+完整过程用简化箭头表示：
+
+```cpp
+搜索 key = 30
+
+之前:  head -> [10] -> [20] -> [30] -> [40] -> NULL
+                     prev   curr
+
+步骤 1: 摘除 [30]
+        head -> [10] -> [20] --------> [40] -> NULL
+                               curr -> [30]
+
+步骤 2: [30] 插入头部
+        head -> [30] -> [10] -> [20] -> [40] -> NULL
+```
+
+**复杂度分析：**
+- 时间复杂度：O(n)，搜索仍然需要遍历
+- 空间复杂度：O(1)
+- **实际效果**：如果同一个元素被搜索 m 次，第一次 O(n)，后续 m-1 次都是 O(1)，总时间从 O(mn) 降为 O(n + m)。在元素访问有局部性的场景下效果显著。
+
+#### 6.4 改进搜索——转置法（Transpose）
+
+**概念解释：**
+
+移至头部法的缺点是：如果搜索一个只出现一次的元素，它会被移到头部，把原来在头部的高频元素挤到后面，可能反而降低整体效率。
+
+转置法（也叫交换法）更温和：**每次找到一个节点，只把它和前一个节点交换位置**，而不是直接移到头部。这样频繁搜索的元素会"缓慢地"向头部移动，不会一次性跳太远。
+
+**思路分析：**
+
+1. 搜索目标 key
+2. 如果找到了（且不是头节点），将其与前驱节点交换位置
+3. 交换方式：修改指针指向，而非交换数据
+
+**代码实现：**
+
+```cpp
+Node* transpose(Node* head, int key) {
+    if (head == nullptr || head->data == key) {
+        return head;  // 空链表或已在头部
+    }
+
+    Node* prev = nullptr;       // curr 的前一个节点
+    Node* curr = head;
+
+    // 查找 key
+    while (curr != nullptr && curr->data != key) {
+        prev = curr;
+        curr = curr->next;
+    }
+
+    if (curr == nullptr || prev == nullptr) {
+        return head;  // 没找到，或 key 就是 head（已在最前）
+    }
+
+    // 把 curr 和 prev 交换位置
+    // 这里我们交换的是它们在链表中的位置（改指针），不是交换数据
+
+    // 需要找到 prevPrev（prev 前面的节点）
+    Node* prevPrev = nullptr;
+    Node* temp = head;
+    while (temp != nullptr && temp != prev) {
+        prevPrev = temp;
+        temp = temp->next;
+    }
+
+    // 现在进行交换：
+    // 之前: ... -> prevPrev -> prev -> curr -> curr->next -> ...
+    // 之后: ... -> prevPrev -> curr -> prev -> curr->next -> ...
+
+    if (prevPrev != nullptr) {
+        prevPrev->next = curr;  // prevPrev 现在指向 curr
+    } else {
+        head = curr;            // prev 就是 head 的情况
+    }
+
+    prev->next = curr->next;    // prev 跳过 curr，指向 curr 的下一个
+    curr->next = prev;          // curr 指向 prev，完成交换
+
+    return head;
+}
+```
+
+实际上，上面的实现需要额外遍历一次来找 `prevPrev`。更简洁的做法是直接交换数据：
+
+```cpp
+// 简洁版：直接交换数据（效果相同，代码更简单）
+Node* transposeSimple(Node* head, int key) {
+    if (head == nullptr || head->data == key) {
+        return head;
+    }
+
+    Node* prev = nullptr;
+    Node* curr = head;
+
+    while (curr != nullptr && curr->data != key) {
+        prev = curr;
+        curr = curr->next;
+    }
+
+    if (curr == nullptr || prev == nullptr) {
+        return head;
+    }
+
+    // 交换 curr 和 prev 的数据
+    int temp = prev->data;
+    prev->data = curr->data;
+    curr->data = temp;
+
+    return head;
+}
+```
+
+注意：交换数据版本在数据域很大时效率不高（拷贝开销大），但在数据域是 int 等小类型时最简洁。下面的图解用指针交换版本来展示真实的位置变化。
+
+**逐步图解：**
+
+假设链表 `10 -> 20 -> 30 -> 40 -> NULL`，搜索 key = 30：
+
+```cpp
+原始链表:
+    head -> [10] -> [20] -> [30] -> [40] -> NULL
+                     prev   curr
+
+搜索到 30 后，将 [30] 和 [20] 交换位置：
+
+之前: head -> [10] -> [20] -> [30] -> [40] -> NULL
+                       ^      ^
+                       |      |
+                      prev   curr
+
+之后: head -> [10] -> [30] -> [20] -> [40] -> NULL
+
+    [30] 只向前移动了一步，没有跳到头部
+```
+
+如果接着再次搜索 30：
+
+```cpp
+当前链表: head -> [10] -> [30] -> [20] -> [40] -> NULL
+
+搜索 30，发现它在第二个位置，与前一个节点 [10] 交换：
+
+之后: head -> [30] -> [10] -> [20] -> [40] -> NULL
+
+    经过两次搜索，[30] 才到头部
+```
+
+对比移至头部法——搜索一次 30 就直接跳到头部。转置法需要多次搜索才能逐渐靠近头部。
+
+**复杂度分析：**
+- 时间复杂度：O(n)，搜索需要遍历
+- 空间复杂度：O(1)
+- **与移至头部法的对比**：转置法更适合元素访问频率分布较均匀的场景，避免偶尔搜索一次的冷数据把热数据挤到后面。
+
+---
+
+**本章小结：**
+
+```cpp
++-------------------------+------------------+------------------+
+|         操作            |  迭代版时间/空间  |  递归版时间/空间  |
++-------------------------+------------------+------------------+
+| 显示链表（正序）        |  O(n) / O(1)     |  O(n) / O(n)     |
+| 显示链表（反序）        |       ---        |  O(n) / O(n)     |
+| 计算节点数              |  O(n) / O(1)     |  O(n) / O(n)     |
+| 求和                   |  O(n) / O(1)     |  O(n) / O(n)     |
+| 求最大值               |  O(n) / O(1)     |  O(n) / O(n)     |
+| 线性搜索               |  O(n) / O(1)     |  O(n) / O(n)     |
+| 移至头部法搜索          |  O(n) / O(1)     |       ---        |
+| 转置法搜索             |  O(n) / O(1)     |       ---        |
++-------------------------+------------------+------------------+
+```
+
+所有操作的时间复杂度都是 O(n)，因为单链表不支持随机访问，必须遍历。迭代版的空间复杂度都是 O(1)，递归版都是 O(n)（递归栈开销）。在实际项目中，如果链表很长，优先使用迭代版本以避免栈溢出。
+# 单链表教程（中篇）—— 核心操作
+
+## 第三阶段：单链表核心操作
+
+掌握了链表的基本结构和遍历方法之后，接下来学习链表最核心的操作：**插入、删除和反转**。
+这些操作是几乎所有链表问题的基础。
+
+---
+
+### 7. 链表中的插入
+
+插入是链表最常用的操作之一。与数组不同，链表的插入不需要移动大量元素，只需要修改指针即可。
+
+---
+
+#### 7.1 在指定位置插入节点（Insert at Position）
+
+##### 概念解释
+
+"在指定位置插入"是指：给定一个位置编号 `pos`（从 0 开始计数），将新节点插入到该位置。
+插入后，新节点成为链表中第 `pos` 个节点（0-indexed），原来该位置及之后的节点全部后移一位。
+
+例如，链表 `1 -> 3 -> 5`，在 `pos = 1` 处插入 `2`，结果变为 `1 -> 2 -> 3 -> 5`。
+
+##### 思路分析
+
+分两种情况讨论：
+
+**情况一：pos == 0，即在头部插入**
+
+直接让新节点的 `next` 指向当前的 `head`，然后将 `head` 更新为新节点。
+
+```cpp
+插入前：head -> [1] -> [3] -> [5] -> nullptr
+
+新节点：[2]
+
+插入后：head -> [2] -> [1] -> [3] -> [5] -> nullptr
+```
+
+注意：这种情况会**改变 head 指针本身**，所以函数需要返回新的 `head`。
+
+**情况二：pos > 0，在中间或尾部插入**
+
+需要先找到位置 `pos` 的**前驱节点**（即第 `pos - 1` 个节点），记为 `prev`。然后：
+
+1. 新节点的 `next` 指向 `prev->next`（先连上后面的链）
+2. `prev->next` 指向新节点（再接入前面的链）
+
+```cpp
+插入前：head -> [1] -> [3] -> [5] -> nullptr
+                prev    ^--- pos = 1，要插在 [3] 的位置
+
+步骤 1：new_node->next = prev->next  （新节点连上 [3]）
+
+        prev -> [3] -> [5]
+          \
+           [2] ------^  （[2] 的 next 指向 [3]）
+
+步骤 2：prev->next = new_node  （前驱连上新节点）
+
+        prev --> [2] --> [3] --> [5]
+```
+
+##### 指针操作顺序——先连后断，绝不能颠倒
+
+这是初学者最容易犯的错误。插入操作有严格的顺序要求：
+
+**正确顺序（先连后断）：**
+```cpp
+1. new_node->next = prev->next;   // 先把新节点连到后面的链
+2. prev->next = new_node;          // 再把前驱连到新节点
+```
+
+**错误顺序（先断后连）——反例演示：**
+
+假设我们先执行 `prev->next = new_node`，再执行 `new_node->next = prev->next`：
+
+```cpp
+原始链表：  [1] -> [3] -> [5] -> nullptr
+             prev
+
+第一步（错误地先执行）：prev->next = new_node
+        [1] -> [2]（新节点，next 目前是 nullptr）
+         ^
+         prev 的 next 已经被改了！
+
+第二步：new_node->next = prev->next
+        此时 prev->next 就是 new_node 自己！！
+        [2] 的 next 指向 [2] 自己，形成自环！
+
+        [1] -> [2] -> [2] -> [2] -> ...  永远循环！
+```
+
+而原来的节点 [3]、[5] 全部丢失，无法访问。
+
+所以记住口诀：**先连新节点到后面，再把前驱接到新节点**。
+
+##### 完整代码
+
+```cpp
+// 在链表的第 pos 个位置（0-indexed）插入值为 val 的节点
+// 返回链表的头指针（因为 pos == 0 时 head 会改变）
+Node* insertAtPosition(Node* head, int pos, int val) {
+    Node* newNode = new Node(val);
+
+    // 特殊情况：在头部插入（pos == 0）
+    if (pos == 0) {
+        newNode->next = head;
+        return newNode;   // 新节点成为新的 head
+    }
+
+    // 一般情况：找到第 pos-1 个节点（前驱节点）
+    Node* prev = head;
+    for (int i = 0; i < pos - 1; i++) {
+        if (prev == nullptr) {
+            // pos 超出链表长度，插入失败
+            std::cout << "位置 " << pos << " 超出链表范围" << std::endl;
+            delete newNode;
+            return head;
+        }
+        prev = prev->next;
+    }
+
+    // 检查 prev 是否为空（pos 刚好比长度大 1 的情况）
+    if (prev == nullptr) {
+        std::cout << "位置 " << pos << " 超出链表范围" << std::endl;
+        delete newNode;
+        return head;
+    }
+
+    // 核心操作：先连后断
+    newNode->next = prev->next;   // 步骤 1：新节点连上后面的链
+    prev->next = newNode;          // 步骤 2：前驱连上新节点
+
+    return head;
+}
+```
+
+##### 逐步图解
+
+以链表 `10 -> 20 -> 30 -> 40` 为例，在 `pos = 2` 处插入 `25`：
+
+```cpp
+初始链表：
+head -> [10|*] -> [20|*] -> [30|*] -> [40|*] -> nullptr
+  0       1         2         3
+
+创建新节点：
+[25|?]   （next 暂未设置）
+
+第一步：找到前驱节点（pos - 1 = 1，即值为 20 的节点）
+head -> [10|*] -> [20|*] -> [30|*] -> [40|*] -> nullptr
+                       ^
+                      prev（第 1 个节点）
+
+第二步：newNode->next = prev->next
+prev->next 指向 [30]，所以 [25] 的 next 也指向 [30]
+
+head -> [10|*] -> [20|*] -> [30|*] -> [40|*] -> nullptr
+                       ^       ^
+                       |       |
+                      prev    [25] 的 next 也指向这里
+                               [25|*] ---^
+
+第三步：prev->next = newNode
+将 [20] 的 next 从指向 [30] 改为指向 [25]
+
+head -> [10|*] -> [20|*] -> [25|*] -> [30|*] -> [40|*] -> nullptr
+          0        1         2        3         4
+
+最终结果：10 -> 20 -> 25 -> 30 -> 40
+```
+
+##### 复杂度分析
+
+| 指标 | 复杂度 | 说明 |
+|------|--------|------|
+| 时间 | O(n) | 最坏情况需要遍历到第 pos-1 个节点 |
+| 空间 | O(1) | 只创建了一个新节点 |
+
+特别说明：如果在头部插入（pos = 0），时间复杂度为 O(1)，因为不需要遍历。
+
+---
+
+#### 7.2 使用头插法创建链表
+
+##### 概念解释
+
+头插法（Head Insertion）是一种创建链表的方法：每次都将新节点插入到链表的**头部**。
+由于总是插在最前面，最终得到的链表顺序与输入顺序**相反**。
+
+##### 思路分析
+
+```cpp
+输入数据：1, 2, 3, 4（按此顺序）
+
+插入 1：  [1] -> nullptr                          head -> [1]
+插入 2：  [2] -> [1] -> nullptr                    head -> [2]
+插入 3：  [3] -> [2] -> [1] -> nullptr              head -> [3]
+插入 4：  [4] -> [3] -> [2] -> [1] -> nullptr        head -> [4]
+
+结果：4 -> 3 -> 2 -> 1（与输入顺序相反）
+```
+
+每一步的操作：
+1. 创建新节点 `newNode`
+2. `newNode->next = head`（新节点指向原来的头）
+3. `head = newNode`（更新 head 为新节点）
+
+##### 完整代码
+
+```cpp
+// 使用头插法，从数组创建链表
+// 返回链表的头指针
+Node* createListByHeadInsertion(int arr[], int n) {
+    Node* head = nullptr;
+
+    for (int i = 0; i < n; i++) {
+        Node* newNode = new Node(arr[i]);
+        newNode->next = head;   // 新节点指向原来的头
+        head = newNode;          // 更新 head
+    }
+
+    return head;
+}
+```
+
+##### 逐步图解
+
+以数组 `[10, 20, 30]` 为例：
+
+```cpp
+初始：head = nullptr
+
+---------- 插入 arr[0] = 10 ----------
+创建 [10]，执行 newNode->next = head（即 nullptr）
+[10] -> nullptr
+ ^
+head
+
+---------- 插入 arr[1] = 20 ----------
+创建 [20]，执行 newNode->next = head（即 [10]）
+[20] -> [10] -> nullptr
+ ^
+head
+
+---------- 插入 arr[2] = 30 ----------
+创建 [30]，执行 newNode->next = head（即 [20]）
+[30] -> [20] -> [10] -> nullptr
+ ^
+head
+
+最终结果：30 -> 20 -> 10（输入的逆序）
+```
+
+##### 复杂度分析
+
+| 指标 | 复杂度 | 说明 |
+|------|--------|------|
+| 时间 | O(n) | n 个元素，每个插入 O(1) |
+| 空间 | O(n) | 创建了 n 个节点 |
+
+---
+
+#### 7.3 使用尾插法创建链表
+
+##### 概念解释
+
+尾插法（Tail Insertion）是一种创建链表的方法：每次都将新节点插入到链表的**尾部**。
+最终得到的链表顺序与输入顺序**一致**。
+
+与头插法相比，尾插法需要额外维护一个 `tail` 指针，指向链表的最后一个节点，以避免每次插入都从头遍历到尾部。
+
+##### 思路分析
+
+```cpp
+输入数据：1, 2, 3, 4（按此顺序）
+
+插入 1：  [1] -> nullptr                    head -> [1], tail -> [1]
+插入 2：  [1] -> [2] -> nullptr              head -> [1], tail -> [2]
+插入 3：  [1] -> [2] -> [3] -> nullptr        head -> [1], tail -> [3]
+插入 4：  [1] -> [2] -> [3] -> [4] -> nullptr  head -> [1], tail -> [4]
+
+结果：1 -> 2 -> 3 -> 4（与输入顺序相同）
+```
+
+每一步的操作：
+1. 创建新节点 `newNode`
+2. 如果链表为空，`head = tail = newNode`
+3. 否则，`tail->next = newNode`，然后 `tail = newNode`
+
+##### 完整代码
+
+```cpp
+// 使用尾插法，从数组创建链表
+// 返回链表的头指针
+Node* createListByTailInsertion(int arr[], int n) {
+    if (n == 0) return nullptr;
+
+    Node* head = new Node(arr[0]);
+    Node* tail = head;
+
+    for (int i = 1; i < n; i++) {
+        Node* newNode = new Node(arr[i]);
+        tail->next = newNode;   // 尾节点指向新节点
+        tail = newNode;          // 更新 tail
+    }
+
+    return head;
+}
+```
+
+##### 逐步图解
+
+以数组 `[10, 20, 30]` 为例：
+
+```cpp
+初始：head = nullptr, tail = nullptr
+
+---------- 插入 arr[0] = 10 ----------
+链表为空，head 和 tail 都指向 [10]
+
+[10] -> nullptr
+ ^
+head, tail
+
+---------- 插入 arr[1] = 20 ----------
+tail->next = [20]，tail = [20]
+
+[10] -> [20] -> nullptr
+ ^       ^
+head    tail
+
+---------- 插入 arr[2] = 30 ----------
+tail->next = [30]，tail = [30]
+
+[10] -> [20] -> [30] -> nullptr
+ ^               ^
+head            tail
+
+最终结果：10 -> 20 -> 30（与输入顺序相同）
+```
+
+##### 头插法与尾插法对比
+
+| 对比项 | 头插法 | 尾插法 |
+|--------|--------|--------|
+| 插入位置 | 链表头部 | 链表尾部 |
+| 输出顺序 | 与输入**相反** | 与输入**相同** |
+| 是否需要 tail 指针 | 不需要 | 需要 |
+| 单次插入时间 | O(1) | O(1)（有 tail 时） |
+| 适用场景 | 需要逆序、栈结构 | 需要保持原始顺序 |
+
+---
+
+#### 7.4 在有序链表中插入
+
+##### 概念解释
+
+假设链表已经按升序排列，要求插入一个新节点后，链表仍然保持升序。
+需要找到**第一个大于或等于待插入值**的节点，将新节点插入到它前面。
+
+##### 思路分析
+
+根据插入位置不同，有三种情况：
+
+**情况一：插入到头部（新值比所有元素都小）**
+```cpp
+插入值：0
+原始链表：3 -> 5 -> 8 -> nullptr
+
+新节点 [0] 的 next 指向 [3]，head 更新为 [0]
+
+结果：0 -> 3 -> 5 -> 8 -> nullptr
+```
+
+**情况二：插入到中间**
+```cpp
+插入值：6
+原始链表：3 -> 5 -> 8 -> nullptr
+
+找到 [5] < 6 < [8]，在 [5] 和 [8] 之间插入
+
+结果：3 -> 5 -> 6 -> 8 -> nullptr
+```
+
+**情况三：插入到尾部（新值比所有元素都大）**
+```cpp
+插入值：10
+原始链表：3 -> 5 -> 8 -> nullptr
+
+遍历到末尾都没有比 10 大的，插到最后
+
+结果：3 -> 5 -> 8 -> 10 -> nullptr
+```
+
+##### 完整代码
+
+```cpp
+// 在有序（升序）链表中插入值为 val 的节点
+// 返回链表的头指针
+Node* insertInSortedList(Node* head, int val) {
+    Node* newNode = new Node(val);
+
+    // 情况一：链表为空，或新值比头节点小，插到头部
+    if (head == nullptr || val <= head->data) {
+        newNode->next = head;
+        return newNode;
+    }
+
+    // 情况二和三：找到合适的插入位置
+    // curr 从 head 开始，找第一个 data >= val 的节点的前驱
+    Node* curr = head;
+    while (curr->next != nullptr && curr->next->data < val) {
+        curr = curr->next;
+    }
+
+    // 此时 curr->next 要么是 nullptr（情况三），要么 data >= val（情况二）
+    newNode->next = curr->next;
+    curr->next = newNode;
+
+    return head;
+}
+```
+
+##### 图解（情况二：中间插入）
+
+以链表 `2 -> 5 -> 8 -> 12` 插入值 `7` 为例：
+
+```cpp
+原始链表：
+head -> [2] -> [5] -> [8] -> [12] -> nullptr
+
+第一步：创建新节点 [7]
+
+第二步：遍历找位置
+  curr = [2]，curr->next = [5]，5 < 7，继续
+  curr = [5]，curr->next = [8]，8 >= 7，停下！
+  此时 curr = [5]
+
+第三步：newNode->next = curr->next = [8]
+        curr->next = newNode = [7]
+
+head -> [2] -> [5] -> [7] -> [8] -> [12] -> nullptr
+                       ^新插入的
+
+最终结果：2 -> 5 -> 7 -> 8 -> 12
+```
+
+##### 复杂度分析
+
+| 指标 | 复杂度 | 说明 |
+|------|--------|------|
+| 时间 | O(n) | 最坏情况遍历整个链表（插入到尾部） |
+| 空间 | O(1) | 只创建了一个新节点 |
+
+---
+
+### 8. 链表中的删除
+
+删除操作是插入的逆操作。与数组删除需要移动元素不同，链表删除只需要修改指针，但要特别注意**内存释放**。
+
+---
+
+#### 8.1 删除指定位置的节点
+
+##### 概念解释
+
+给定位置 `pos`（0-indexed），删除链表中第 `pos` 个节点，并返回被删除节点的值。
+
+##### 思路分析
+
+**情况一：删除头节点（pos == 0）**
+
+保存头节点的值，将 `head` 指向 `head->next`，然后释放原头节点。
+
+```cpp
+删除前：head -> [1] -> [3] -> [5] -> nullptr
+
+删除 pos = 0：
+  1. 保存值 1
+  2. temp = head（即 [1]）
+  3. head = head->next（即 [3]）
+  4. delete temp
+
+删除后：head -> [3] -> [5] -> nullptr
+```
+
+**情况二：删除中间或尾部节点（pos > 0）**
+
+找到被删节点的**前驱节点** `prev`，然后：
+1. `temp = prev->next`（临时指针保存要删除的节点）
+2. `prev->next = temp->next`（跳过被删节点）
+3. `delete temp`（释放内存）
+
+```cpp
+删除前：head -> [1] -> [3] -> [5] -> nullptr
+                prev   temp
+
+删除 pos = 1：
+  prev->next = temp->next = [5]
+  delete temp
+
+删除后：head -> [1] -> [5] -> nullptr
+```
+
+##### 完整代码
+
+```cpp
+// 删除链表中第 pos 个节点（0-indexed）
+// 返回被删除节点的值；如果 pos 非法，返回 -1 并打印提示
+// 注意：head 可能被修改，所以参数用引用
+int deleteAtPosition(Node*& head, int pos) {
+    if (head == nullptr) {
+        std::cout << "链表为空，无法删除" << std::endl;
+        return -1;
+    }
+
+    // 情况一：删除头节点
+    if (pos == 0) {
+        Node* temp = head;
+        int val = temp->data;
+        head = head->next;
+        delete temp;
+        return val;
+    }
+
+    // 情况二：找到第 pos-1 个节点（前驱）
+    Node* prev = head;
+    for (int i = 0; i < pos - 1; i++) {
+        if (prev->next == nullptr) {
+            std::cout << "位置 " << pos << " 超出链表范围" << std::endl;
+            return -1;
+        }
+        prev = prev->next;
+    }
+
+    // 检查要删除的节点是否存在
+    if (prev->next == nullptr) {
+        std::cout << "位置 " << pos << " 超出链表范围" << std::endl;
+        return -1;
+    }
+
+    // 核心操作
+    Node* temp = prev->next;         // 临时保存要删除的节点
+    int val = temp->data;            // 保存返回值
+    prev->next = temp->next;         // 跳过被删节点
+    delete temp;                     // 释放内存
+
+    return val;
+}
+```
+
+##### 逐步图解
+
+以链表 `10 -> 20 -> 30 -> 40` 删除 `pos = 2`（值为 30 的节点）为例：
+
+```cpp
+原始链表：
+head -> [10|*] -> [20|*] -> [30|*] -> [40|*] -> nullptr
+  0       1         2         3
+
+第一步：找到前驱节点（pos - 1 = 1）
+head -> [10|*] -> [20|*] -> [30|*] -> [40|*] -> nullptr
+                       ^
+                      prev
+
+第二步：temp = prev->next（即 [30]）
+head -> [10|*] -> [20|*] -> [30|*] -> [40|*] -> nullptr
+                       ^       ^
+                      prev    temp
+
+第三步：prev->next = temp->next（[20] 的 next 指向 [40]）
+head -> [10|*] -> [20|*] ---------> [40|*] -> nullptr
+                       ^       
+                      prev    
+                       [30|*]（已断开，等待 delete）
+
+第四步：delete temp（释放 [30] 的内存）
+
+最终结果：
+head -> [10] -> [20] -> [40] -> nullptr
+```
+
+##### 复杂度分析
+
+| 指标 | 复杂度 | 说明 |
+|------|--------|------|
+| 时间 | O(n) | 最坏情况遍历到第 pos-1 个节点 |
+| 空间 | O(1) | 只用了临时指针 |
+
+---
+
+#### 8.2 按值删除节点
+
+##### 概念解释
+
+给定一个目标值 `target`，删除链表中**第一个**值等于 `target` 的节点。
+
+##### 思路分析
+
+需要处理两个特殊情况：
+1. 要删除的节点恰好是头节点
+2. 要删除的节点不存在
+
+其余情况与按位置删除类似：找到前驱，跳过被删节点，释放内存。
+
+##### 完整代码
+
+```cpp
+// 删除链表中第一个值等于 target 的节点
+// 返回 true 表示删除成功，false 表示未找到
+bool deleteByValue(Node*& head, int target) {
+    if (head == nullptr) return false;
+
+    // 特殊情况：头节点就是要删除的
+    if (head->data == target) {
+        Node* temp = head;
+        head = head->next;
+        delete temp;
+        return true;
+    }
+
+    // 找前驱节点
+    Node* prev = head;
+    while (prev->next != nullptr && prev->next->data != target) {
+        prev = prev->next;
+    }
+
+    // 没找到
+    if (prev->next == nullptr) return false;
+
+    // 找到了，执行删除
+    Node* temp = prev->next;
+    prev->next = temp->next;
+    delete temp;
+    return true;
+}
+```
+
+##### 复杂度分析
+
+| 指标 | 复杂度 | 说明 |
+|------|--------|------|
+| 时间 | O(n) | 最坏情况遍历整个链表 |
+| 空间 | O(1) | 只用了临时指针 |
+
+---
+
+### 9. 链表的有序性操作
+
+有序链表是链表的一种常见状态，很多算法都依赖于链表的有序性。
+
+---
+
+#### 9.1 检查链表是否有序
+
+##### 概念解释
+
+判断链表是否按**升序**排列。空链表和只有一个节点的链表视为有序。
+
+##### 思路分析
+
+从头到尾遍历，比较每一对相邻节点。如果发现某一对 `curr->data > curr->next->data`，则链表无序。
+
+##### 完整代码
+
+```cpp
+// 检查链表是否按升序排列
+bool isSorted(Node* head) {
+    // 空链表或单个节点，视为有序
+    if (head == nullptr || head->next == nullptr) {
+        return true;
+    }
+
+    Node* curr = head;
+    while (curr->next != nullptr) {
+        if (curr->data > curr->next->data) {
+            return false;   // 发现逆序对
+        }
+        curr = curr->next;
+    }
+
+    return true;
+}
+```
+
+##### 复杂度分析
+
+| 指标 | 复杂度 | 说明 |
+|------|--------|------|
+| 时间 | O(n) | 最坏情况遍历一次 |
+| 空间 | O(1) | 只用了一个指针 |
+
+---
+
+#### 9.2 移除有序链表中的重复元素
+
+##### 概念解释
+
+给定一个**已排序**的链表，删除其中所有重复的元素，使得每个值只出现一次。
+
+例如：`2 -> 3 -> 3 -> 5 -> 5 -> 5 -> 8` 变为 `2 -> 3 -> 5 -> 8`。
+
+由于链表已排序，重复的元素一定是**相邻**的，这大大简化了问题。
+
+##### 思路分析
+
+遍历链表，对每个节点检查它的下一个节点是否具有相同的值：
+- 如果相同，删除下一个节点（注意释放内存）
+- 如果不同，移到下一个节点
+
+关键点：删除一个重复节点后，**不要**立即前移，因为可能还有更多重复。只有当 `curr->next` 的值不同时，才移动 `curr`。
+
+##### 完整代码
+
+```cpp
+// 移除有序链表中的重复元素（每个值只保留一个）
+Node* removeDuplicates(Node* head) {
     if (head == nullptr || head->next == nullptr) {
         return head;
     }
 
-    // 递归反转 head->next 及之后的部分
-    ListNode* newHead = reverseList(head->next);
+    Node* curr = head;
+    while (curr->next != nullptr) {
+        if (curr->data == curr->next->data) {
+            // 发现重复，删除 curr->next
+            Node* temp = curr->next;
+            curr->next = temp->next;
+            delete temp;
+            // 注意：curr 不移动，继续检查新的 curr->next
+        } else {
+            // 不重复，移到下一个节点
+            curr = curr->next;
+        }
+    }
 
-    // 现在 head->next 是反转后子链表的尾节点
-    // 让它指回 head
-    head->next->next = head;
-    head->next = nullptr;  // head 变成新的尾节点
-
-    return newHead;
+    return head;
 }
 ```
 
-**递归展开图解（链表 1->2->3）：**
+##### 逐步图解
 
+以链表 `2 -> 3 -> 3 -> 5 -> 5 -> 5 -> 8` 为例：
+
+```cpp
+初始：
+head -> [2] -> [3] -> [3] -> [5] -> [5] -> [5] -> [8] -> nullptr
+         ^
+        curr
+
+curr->data = 2，curr->next->data = 3，不重复，curr 前移
+
+head -> [2] -> [3] -> [3] -> [5] -> [5] -> [5] -> [8] -> nullptr
+                ^
+               curr
+
+curr->data = 3，curr->next->data = 3，重复！删除 curr->next
+释放第一个 [3] 后面的那个 [3]
+
+head -> [2] -> [3] -> [5] -> [5] -> [5] -> [8] -> nullptr
+                ^
+               curr（不移动，继续检查）
+
+curr->data = 3，curr->next->data = 5，不重复，curr 前移
+
+head -> [2] -> [3] -> [5] -> [5] -> [5] -> [8] -> nullptr
+                       ^
+                      curr
+
+curr->data = 5，curr->next->data = 5，重复！删除 curr->next
+
+head -> [2] -> [3] -> [5] -> [5] -> [8] -> nullptr
+                       ^
+                      curr（不移动）
+
+curr->data = 5，curr->next->data = 5，重复！删除 curr->next
+
+head -> [2] -> [3] -> [5] -> [8] -> nullptr
+                       ^
+                      curr（不移动）
+
+curr->data = 5，curr->next->data = 8，不重复，curr 前移
+
+head -> [2] -> [3] -> [5] -> [8] -> nullptr
+                              ^
+                             curr
+
+curr->next == nullptr，循环结束
+
+最终结果：2 -> 3 -> 5 -> 8
 ```
-reverseList(1)
-  ├── reverseList(2)
-  │     ├── reverseList(3) → 返回 3（基线条件）
-  │     │
-  │     ├── head=2, head->next=3
-  │     │   3->next = 2    →  3 -> 2
-  │     │   2->next = nullptr
-  │     └── 返回 newHead=3
-  │
-  ├── head=1, head->next=2
-  │   2->next = 1    →  3 -> 2 -> 1
-  │   1->next = nullptr
-  └── 返回 newHead=3
 
-最终结果：3 -> 2 -> 1 -> nullptr
+##### 复杂度分析
+
+| 指标 | 复杂度 | 说明 |
+|------|--------|------|
+| 时间 | O(n) | 每个节点最多被访问一次 |
+| 空间 | O(1) | 只用了临时指针 |
+
+---
+
+### 10. 链表反转（Reverse）—— 三种方法
+
+链表反转是链表操作中最经典、最重要、也是面试中出现频率最高的题目之一。
+本节介绍三种不同的反转方法，从易到难，各有优缺点。
+
+反转前后的效果：
+```cpp
+反转前：head -> [1] -> [2] -> [3] -> [4] -> [5] -> nullptr
+
+反转后：head -> [5] -> [4] -> [3] -> [2] -> [1] -> nullptr
+        （head 指向原来的尾节点）
 ```
 
-#### 6.2 链表排序
+---
 
-**方法一：插入排序 —— O(n²)，简单直观**
+#### 10.1 方法一：使用辅助数组
 
+##### 概念解释
+
+最直观的方法：把链表的所有值复制到一个数组中，然后从数组末尾开始，反向写回链表。
+
+##### 思路分析
+
+1. 遍历链表，将每个节点的值存入数组
+2. 再次遍历链表，从数组的最后一个元素开始，依次写回每个节点
+
+这种方法不改变节点之间的连接关系，只改变节点中存储的值。
+
+##### 完整代码
+
+```cpp
+#include <vector>
+
+// 方法一：使用辅助数组反转链表
+Node* reverseUsingArray(Node* head) {
+    if (head == nullptr || head->next == nullptr) {
+        return head;
+    }
+
+    // 第一步：将所有值存入数组
+    std::vector<int> values;
+    Node* curr = head;
+    while (curr != nullptr) {
+        values.push_back(curr->data);
+        curr = curr->next;
+    }
+
+    // 第二步：从数组末尾反向写回链表
+    curr = head;
+    int i = values.size() - 1;
+    while (curr != nullptr) {
+        curr->data = values[i];
+        curr = curr->next;
+        i--;
+    }
+
+    return head;
+}
 ```
-ListNode* insertionSortList(ListNode* head) {
-    if (head == nullptr || head->next == nullptr) return head;
 
-    ListNode* dummy = new ListNode(0);  // 使用哨兵节点
-    ListNode* curr = head;
+##### 图解
+
+```cpp
+原始链表：head -> [1] -> [2] -> [3] -> [4] -> [5] -> nullptr
+
+第一步：遍历存入数组
+  values = [1, 2, 3, 4, 5]
+
+第二步：反向写回
+  从 values[4]=5 开始写回 [1] 节点：  [5] -> [2] -> [3] -> [4] -> [5]
+  values[3]=4 写回 [2] 节点：         [5] -> [4] -> [3] -> [4] -> [5]
+  values[2]=3 写回 [3] 节点：         [5] -> [4] -> [3] -> [4] -> [5]
+  values[1]=2 写回 [4] 节点：         [5] -> [4] -> [3] -> [2] -> [5]
+  values[0]=1 写回 [5] 节点：         [5] -> [4] -> [3] -> [2] -> [1]
+
+最终结果：head -> [5] -> [4] -> [3] -> [2] -> [1] -> nullptr
+```
+
+##### 复杂度分析
+
+| 指标 | 复杂度 | 说明 |
+|------|--------|------|
+| 时间 | O(n) | 遍历两次链表 |
+| 空间 | O(n) | 额外的数组空间 |
+
+---
+
+#### 10.2 方法二：滑动指针法（三指针迭代反转）
+
+##### 概念解释
+
+这是最常用、最高效的迭代方法。使用三个指针在链表上"滑动"，逐步将每个节点的 `next` 指针反转方向。
+
+三个指针分别是：
+- `prev`：已经反转的部分的头（初始为 `nullptr`）
+- `curr`：当前正在处理的节点（初始为 `head`）
+- `next_node`：保存 `curr` 的下一个节点（防止断链后丢失）
+
+##### 思路分析
+
+每一步的核心操作：
+1. 保存 `curr->next` 到 `next_node`（防止丢失后面的节点）
+2. 将 `curr->next` 指向 `prev`（反转指向）
+3. 移动 `prev = curr`
+4. 移动 `curr = next_node`
+
+循环直到 `curr == nullptr`，此时 `prev` 就是新的头节点。
+
+##### 完整代码
+
+```cpp
+// 方法二：三指针迭代反转
+Node* reverseIterative(Node* head) {
+    Node* prev = nullptr;
+    Node* curr = head;
 
     while (curr != nullptr) {
-        ListNode* nextTemp = curr->next;  // 保存下一个待处理节点
-
-        // 在已排序部分中找到 curr 应该插入的位置
-        ListNode* prev = dummy;
-        while (prev->next != nullptr && prev->next->data < curr->data) {
-            prev = prev->next;
-        }
-
-        // 将 curr 插入到 prev 之后
-        curr->next = prev->next;
-        prev->next = curr;
-
-        curr = nextTemp;  // 处理下一个节点
+        Node* next_node = curr->next;  // 保存下一个节点
+        curr->next = prev;             // 反转指向
+        prev = curr;                   // prev 前移
+        curr = next_node;              // curr 前移
     }
 
-    ListNode* sortedHead = dummy->next;
-    delete dummy;
-    return sortedHead;
+    // 循环结束时，prev 指向原链表的最后一个节点，即新的头
+    return prev;
 }
 ```
 
-**方法二：归并排序 —— O(n log n)，链表排序的最优解**
+##### 非常详细的逐步图解
 
-归并排序非常适合链表，因为“合并”步骤只需要改指针，不需要像数组那样搬移元素。若采用递归写法，额外空间主要来自调用栈（O(log n)）。
+以链表 `1 -> 2 -> 3 -> 4 -> 5 -> nullptr` 为例，完整展示每一步的变化：
 
+```cpp
+初始状态：
+prev = nullptr
+curr = [1]
+
+nullptr    [1] -> [2] -> [3] -> [4] -> [5] -> nullptr
+ ^prev     ^curr
 ```
-// 辅助函数：找到链表的中间节点（快慢指针法）
-ListNode* getMiddle(ListNode* head) {
-    ListNode* slow = head;
-    ListNode* fast = head->next;  // 注意：fast 从 head->next 开始
 
-    while (fast != nullptr && fast->next != nullptr) {
-        slow = slow->next;
-        fast = fast->next->next;
+**第 1 轮循环：**
+
+```cpp
+步骤 1：next_node = curr->next = [2]
+
+nullptr    [1] -> [2] -> [3] -> [4] -> [5] -> nullptr
+ ^prev     ^curr   ^next_node
+
+步骤 2：curr->next = prev（[1] 的 next 指向 nullptr）
+
+nullptr <- [1]    [2] -> [3] -> [4] -> [5] -> nullptr
+ ^prev     ^curr   ^next_node
+
+步骤 3：prev = curr = [1]
+步骤 4：curr = next_node = [2]
+
+状态：
+          [1] -> nullptr
+           ^
+           prev
+                    [2] -> [3] -> [4] -> [5] -> nullptr
+                    ^curr
+
+注：[1] 已经从链表中"摘出"，它的 next 指向 nullptr。
+    [2] 开始是剩余链表的头。
+```
+
+**第 2 轮循环：**
+
+```cpp
+步骤 1：next_node = curr->next = [3]
+
+          [1] -> nullptr
+           ^prev
+                    [2] -> [3] -> [4] -> [5] -> nullptr
+                    ^curr   ^next_node
+
+步骤 2：curr->next = prev（[2] 的 next 指向 [1]）
+
+          [1] -> nullptr
+           ^
+          [2] --------^
+           ^curr        prev
+                    [3] -> [4] -> [5] -> nullptr
+                    ^next_node
+
+步骤 3：prev = curr = [2]
+步骤 4：curr = next_node = [3]
+
+状态：
+          [2] -> [1] -> nullptr
+           ^prev
+                           [3] -> [4] -> [5] -> nullptr
+                           ^curr
+```
+
+**第 3 轮循环：**
+
+```cpp
+步骤 1：next_node = curr->next = [4]
+步骤 2：curr->next = prev（[3] 的 next 指向 [2]）
+步骤 3：prev = curr = [3]
+步骤 4：curr = next_node = [4]
+
+状态：
+          [3] -> [2] -> [1] -> nullptr
+           ^prev
+                                        [4] -> [5] -> nullptr
+                                        ^curr
+```
+
+**第 4 轮循环：**
+
+```cpp
+步骤 1：next_node = curr->next = [5]
+步骤 2：curr->next = prev（[4] 的 next 指向 [3]）
+步骤 3：prev = curr = [4]
+步骤 4：curr = next_node = [5]
+
+状态：
+          [4] -> [3] -> [2] -> [1] -> nullptr
+           ^prev
+                                                             [5] -> nullptr
+                                                             ^curr
+```
+
+**第 5 轮循环：**
+
+```cpp
+步骤 1：next_node = curr->next = nullptr
+步骤 2：curr->next = prev（[5] 的 next 指向 [4]）
+步骤 3：prev = curr = [5]
+步骤 4：curr = next_node = nullptr
+
+状态：
+          [5] -> [4] -> [3] -> [2] -> [1] -> nullptr
+           ^prev   ^curr = nullptr
+```
+
+**循环结束**（curr == nullptr），返回 prev：
+
+```cpp
+新 head -> [5] -> [4] -> [3] -> [2] -> [1] -> nullptr
+
+反转完成！
+```
+
+##### 指针变化汇总表
+
+| 轮次 | prev | curr | next_node | 操作（curr->next = prev） |
+|------|------|------|-----------|--------------------------|
+| 初始 | nullptr | [1] | - | - |
+| 1 | [1] | [2] | [2] | [1]->next = nullptr |
+| 2 | [2] | [3] | [3] | [2]->next = [1] |
+| 3 | [3] | [4] | [4] | [3]->next = [2] |
+| 4 | [4] | [5] | [5] | [4]->next = [3] |
+| 5 | [5] | nullptr | nullptr | [5]->next = [4] |
+
+##### 复杂度分析
+
+| 指标 | 复杂度 | 说明 |
+|------|--------|------|
+| 时间 | O(n) | 遍历一次链表 |
+| 空间 | O(1) | 只用了三个指针 |
+
+这是**最优解法**，面试中优先使用。
+
+---
+
+#### 10.3 方法三：递归反转
+
+##### 概念解释
+
+递归法利用函数调用栈，先递归到链表尾部，然后在回溯过程中逐个反转指针。
+
+核心思想：如果链表后面的部分已经反转好了，那么只需要把当前节点接到已反转部分的末尾。
+
+##### 递归的核心逻辑
+
+假设链表是 `1 -> 2 -> 3 -> 4 -> 5`：
+
+```cpp
+递归调用 reverseRecursive([2 -> 3 -> 4 -> 5])
+  先把 [2 -> 3 -> 4 -> 5] 反转为 [5 -> 4 -> 3 -> 2]
+  
+然后处理 [1]：
+  1. [2]（即 head->next）现在是已反转部分的尾节点
+  2. 让 [2]->next = [1]（把 [1] 接到已反转部分末尾）
+  3. [1]->next = nullptr（[1] 现在是最后一个节点）
+
+结果：[5] -> [4] -> [3] -> [2] -> [1] -> nullptr
+```
+
+对应的两行关键代码：
+```cpp
+head->next->next = head;   // 让已反转部分的尾（原 head->next）指向 head
+head->next = nullptr;       // head 现在是尾节点，next 置空
+```
+
+##### 完整代码
+
+```cpp
+// 方法三：递归反转
+Node* reverseRecursive(Node* head) {
+    // 基础情况：空链表或只有一个节点
+    if (head == nullptr || head->next == nullptr) {
+        return head;
     }
 
-    return slow;  // slow 指向中间节点（偏左）
+    // 递归调用：反转 head 之后的部分
+    Node* newHead = reverseRecursive(head->next);
+
+    // 回溯时反转指针
+    head->next->next = head;   // 让后继节点指回自己
+    head->next = nullptr;       // 自己的 next 置空
+
+    return newHead;   // newHead 始终是原链表的最后一个节点
 }
+```
 
-// 辅助函数：合并两个有序链表
-ListNode* mergeTwoLists(ListNode* l1, ListNode* l2) {
-    ListNode dummy(0);
-    ListNode* tail = &dummy;
+##### 非常详细的递归展开图
 
-    while (l1 != nullptr && l2 != nullptr) {
-        if (l1->data <= l2->data) {
-            tail->next = l1;
-            l1 = l1->next;
-        } else {
-            tail->next = l2;
-            l2 = l2->next;
-        }
+以链表 `1 -> 2 -> 3 -> 4 -> 5` 为例，完整展示递归调用栈和回溯过程：
+
+```cpp
+==================== 递归深入阶段（压栈） ====================
+
+调用栈（从底到顶）：
+
+第一层调用：reverseRecursive([1 -> 2 -> 3 -> 4 -> 5])
+  head = [1]，head->next = [2]，不是基础情况
+  需要先调用 reverseRecursive([2 -> 3 -> 4 -> 5])
+  ----------------------------------------------
+
+  第二层调用：reverseRecursive([2 -> 3 -> 4 -> 5])
+    head = [2]，head->next = [3]，不是基础情况
+    需要先调用 reverseRecursive([3 -> 4 -> 5])
+    ----------------------------------------------
+
+    第三层调用：reverseRecursive([3 -> 4 -> 5])
+      head = [3]，head->next = [4]，不是基础情况
+      需要先调用 reverseRecursive([4 -> 5])
+      ----------------------------------------------
+
+      第四层调用：reverseRecursive([4 -> 5])
+        head = [4]，head->next = [5]，不是基础情况
+        需要先调用 reverseRecursive([5])
+        ----------------------------------------------
+
+        第五层调用：reverseRecursive([5])
+          head = [5]，head->next == nullptr
+          基础情况！返回 [5]
+
+          此时链表状态：[5] -> nullptr
+          newHead = [5]
+
+
+==================== 回溯阶段（出栈，反转指针） ====================
+
+回到第四层：head = [4]，newHead = [5]
+
+  链表当前状态：[4] -> [5] -> nullptr
+                 ^
+                head
+
+  执行 head->next->next = head
+  即 [4]->next 是 [5]，[5]->next = [4]
+
+  链表变为：[4] <-> [5]     （形成环，但马上打破）
+            双向连接
+
+  执行 head->next = nullptr
+  即 [4]->next = nullptr
+
+  链表变为：[5] -> [4] -> nullptr
+
+  返回 newHead = [5]
+
+  此层链表状态：
+  [5] -> [4] -> nullptr
+   ^
+  newHead
+
+
+回到第三层：head = [3]，newHead = [5]
+
+  链表当前状态：[3] -> [4] -> [5]（不对！[4]->next 应该是 nullptr）
+  
+  等一下，更准确地说，经过上面的修改：
+  [3] 的 next 仍是 [4]，而 [4] 的 next 已经是 nullptr
+  [5] 的 next 是 [4]
+  
+  完整状态：
+  [3] -> [4] -> nullptr
+   ^
+  head
+  
+  [5] -> [4] -> nullptr
+   ^
+  newHead
+
+  执行 head->next->next = head
+  [3]->next = [4]，所以 [4]->next = [3]
+
+  链表变为：[5] -> [4] -> [3] -> nullptr（[4] 连回 [3]）
+
+  执行 head->next = nullptr
+  [3]->next = nullptr
+
+  链表变为：[5] -> [4] -> [3] -> nullptr
+
+  返回 newHead = [5]
+
+
+回到第二层：head = [2]，newHead = [5]
+
+  链表当前状态：[2] -> [3] -> nullptr（[3] 的 next 已在上层被置空）
+
+  执行 head->next->next = head
+  [2]->next = [3]，所以 [3]->next = [2]
+
+  执行 head->next = nullptr
+  [2]->next = nullptr
+
+  链表变为：[5] -> [4] -> [3] -> [2] -> nullptr
+
+  返回 newHead = [5]
+
+
+回到第一层：head = [1]，newHead = [5]
+
+  链表当前状态：[1] -> [2] -> nullptr（[2] 的 next 已在上层被置空）
+
+  执行 head->next->next = head
+  [1]->next = [2]，所以 [2]->next = [1]
+
+  执行 head->next = nullptr
+  [1]->next = nullptr
+
+  链表变为：[5] -> [4] -> [3] -> [2] -> [1] -> nullptr
+
+  返回 newHead = [5]
+
+
+==================== 最终结果 ====================
+
+head（新） -> [5] -> [4] -> [3] -> [2] -> [1] -> nullptr
+```
+
+##### 递归调用栈总结
+
+```cpp
+调用方向（深入）          返回方向（回溯）
+                        
+reverse(1..5)           <- return [5]
+  |
+  reverse(2..5)         <- return [5]
+    |
+    reverse(3..5)       <- return [5]
+      |
+      reverse(4..5)     <- return [5]
+        |
+        reverse(5)      -> return [5]  （基础情况）
+```
+
+每层回溯时执行的操作：
+
+| 回溯层 | head | 操作 | 链表局部变化 |
+|--------|------|------|-------------|
+| 第五层 | [5] | 基础情况，直接返回 | [5] -> nullptr |
+| 第四层 | [4] | [5]->next=[4], [4]->next=nullptr | [5] -> [4] -> nullptr |
+| 第三层 | [3] | [4]->next=[3], [3]->next=nullptr | [5] -> [4] -> [3] -> nullptr |
+| 第二层 | [2] | [3]->next=[2], [2]->next=nullptr | [5] -> [4] -> [3] -> [2] -> nullptr |
+| 第一层 | [1] | [2]->next=[1], [1]->next=nullptr | [5] -> [4] -> [3] -> [2] -> [1] -> nullptr |
+
+##### 复杂度分析
+
+| 指标 | 复杂度 | 说明 |
+|------|--------|------|
+| 时间 | O(n) | 递归 n 层，每层 O(1) |
+| 空间 | O(n) | 递归调用栈深度为 n |
+
+递归法在链表很长时可能导致**栈溢出**（stack overflow），因为调用栈深度等于链表长度。
+
+---
+
+#### 10.4 三种反转方法的对比总结
+
+| 对比项 | 辅助数组法 | 三指针迭代法 | 递归法 |
+|--------|-----------|-------------|--------|
+| 时间复杂度 | O(n) | O(n) | O(n) |
+| 空间复杂度 | **O(n)** | **O(1)** | **O(n)** |
+| 是否修改节点连接 | 否（只改值） | 是 | 是 |
+| 代码难度 | 简单 | 中等 | 较难 |
+| 是否有栈溢出风险 | 否 | 否 | **是** |
+| 实际效率 | 较慢（两次遍历 + 数组开销） | **最快** | 较慢（递归开销） |
+| 面试推荐度 | 一般 | **强烈推荐** | 作为加分项 |
+
+**建议**：
+- 面试时优先写**三指针迭代法**，这是标准答案
+- 如果面试官要求用递归，写出递归版本并说明栈溢出的风险
+- 辅助数组法可以用来验证其他方法的正确性，但一般不作为面试答案
+## 第四阶段：单链表高级操作
+
+在前三阶段中，我们学会了单链表的基本操作（创建、遍历、插入、删除）、查找与统计操作（搜索、求和、最大值、计数）、以及有序性判断与整理操作（判有序、去重、反转）。本阶段将进入更复杂但极其常见的链表操作：连接、合并、环检测，最后用 C++ 类将所有操作封装起来。
+
+---
+
+### 11. 连接两个链表（Concatenation）
+
+#### 11.1 概念解释
+
+"连接"（Concatenation）的意思很简单：把链表 B 的所有节点，接到链表 A 的末尾，形成一个更长的链表。
+
+```cpp
+链表 A:  10 -> 20 -> 30 -> NULL
+链表 B:  40 -> 50 -> NULL
+
+连接后:  10 -> 20 -> 30 -> 40 -> 50 -> NULL
+```
+
+连接操作的关键点：
+
+- 只需要把 A 的尾节点的 `next` 指针指向 B 的头节点
+- 不需要复制任何节点，也不需要逐个移动
+- 连接后，A 和 B 共享节点，这是一个重要的内存管理注意事项
+
+#### 11.2 思路分析
+
+```cpp
+步骤 1: 检查 A 是否为空，如果是，直接返回 B 的 head
+步骤 2: 检查 B 是否为空，如果是，直接返回 A 的 head
+步骤 3: 找到 A 的尾节点（即 next == NULL 的节点）
+步骤 4: 将 A 的尾节点的 next 指向 B 的 head
+步骤 5: 返回 A 的 head
+```
+
+#### 11.3 代码实现
+
+```cpp
+#include <iostream>
+using namespace std;
+
+struct Node {
+    int data;
+    Node* next;
+    Node(int val) : data(val), next(nullptr) {}
+};
+
+// 连接两个链表：将 B 接在 A 末尾，返回 A 的 head
+Node* concatenate(Node* headA, Node* headB) {
+    // 情况 1: A 为空，直接返回 B
+    if (headA == nullptr) return headB;
+
+    // 情况 2: B 为空，直接返回 A
+    if (headB == nullptr) return headA;
+
+    // 情况 3: 两个都不为空，找到 A 的尾节点
+    Node* tail = headA;
+    while (tail->next != nullptr) {
         tail = tail->next;
     }
 
-    tail->next = (l1 != nullptr) ? l1 : l2;
-    return dummy.next;
+    // 将 A 的尾节点指向 B 的头节点
+    tail->next = headB;
+    return headA;
 }
 
-// 归并排序主函数
-ListNode* mergeSort(ListNode* head) {
-    // 基线条件：空链表或只有一个节点
-    if (head == nullptr || head->next == nullptr) {
-        return head;
+// 辅助函数：创建链表（尾插法）
+Node* createList(int arr[], int n) {
+    if (n == 0) return nullptr;
+    Node* head = new Node(arr[0]);
+    Node* tail = head;
+    for (int i = 1; i < n; i++) {
+        tail->next = new Node(arr[i]);
+        tail = tail->next;
+    }
+    return head;
+}
+
+void display(Node* head) {
+    Node* temp = head;
+    while (temp != nullptr) {
+        cout << temp->data << " -> ";
+        temp = temp->next;
+    }
+    cout << "NULL" << endl;
+}
+
+int main() {
+    int arrA[] = {10, 20, 30};
+    int arrB[] = {40, 50};
+    Node* headA = createList(arrA, 3);
+    Node* headB = createList(arrB, 2);
+
+    cout << "链表 A: ";  display(headA);
+    cout << "链表 B: ";  display(headB);
+
+    headA = concatenate(headA, headB);
+    cout << "连接后: ";  display(headA);
+    return 0;
+}
+```
+
+输出：
+
+```cpp
+链表 A: 10 -> 20 -> 30 -> NULL
+链表 B: 40 -> 50 -> NULL
+连接后: 10 -> 20 -> 30 -> 40 -> 50 -> NULL
+```
+
+#### 11.4 逐步图解
+
+**初始状态：**
+
+```cpp
+链表 A:
+  headA
+    |
+    v
+  +------+----+     +------+----+     +------+----+
+  |  10  |  --+---> |  20  |  --+---> |  30  |NULL |
+  +------+----+     +------+----+     +------+----+
+
+链表 B:
+  headB
+    |
+    v
+  +------+----+     +------+----+
+  |  40  |  --+---> |  50  |NULL |
+  +------+----+     +------+----+
+```
+
+**步骤 1-2: A 和 B 都不为空，进入主逻辑。**
+
+**步骤 3: 从 headA 开始遍历，找到尾节点。tail 依次经过 10、20，最终停在 30（其 next 为 NULL）：**
+
+```cpp
+  headA
+    |
+    v
+  +------+----+     +------+----+     +------+----+
+  |  10  |  --+---> |  20  |  --+---> |  30  |NULL |
+  +------+----+     +------+----+     +------+----+
+                                         ^
+                                         |
+                                        tail
+```
+
+**步骤 4: 将 tail->next 指向 headB，连接完成：**
+
+```cpp
+  headA                                           headB
+    |                                               |
+    v                                               v
+  +------+----+     +------+----+     +------+----+     +------+----+     +------+----+
+  |  10  |  --+---> |  20  |  --+---> |  30  |  --+---> |  40  |  --+---> |  50  |NULL |
+  +------+----+     +------+----+     +------+----+     +------+----+     +------+----+
+                                         ^
+                                         |
+                                    tail->next = headB
+```
+
+注意：headB 指针仍然存在，指向节点 40，但它不再是独立链表的头——它现在是长链表中间的一部分。
+
+#### 11.5 内存管理注意事项
+
+连接操作只修改了一个指针，并没有创建新节点。因此：
+
+- **危险操作**：如果连接后分别对 headA 和 headB 调用 delete 链表函数，节点 40 和 50 会被 delete 两次，导致程序崩溃
+- **正确做法**：连接后只通过 headA 管理整条链表的内存，将 headB 视为"已交出所有权"
+
+#### 11.6 复杂度分析
+
+| 操作 | 时间复杂度 | 说明 |
+|------|-----------|------|
+| 找到 A 的尾节点 | O(n) | n 是链表 A 的长度 |
+| 修改指针 | O(1) | 只做了一次赋值 |
+| **总计** | **O(n)** | n 是链表 A 的长度 |
+
+空间复杂度：O(1)。如果额外存储了尾节点指针，连接操作可以优化到 O(1)。
+
+---
+
+### 12. 合并两个有序链表（Merge Two Sorted Lists）
+
+#### 12.1 概念解释
+
+"合并"（Merge）与"连接"不同。连接只是简单地把 B 接到 A 后面，不关心顺序。而**合并要求两个输入链表是有序的，合并后的结果链表也必须是有序的**。
+
+```cpp
+链表 A:  10 -> 30 -> 50 -> NULL    (升序)
+链表 B:  20 -> 40 -> 60 -> NULL    (升序)
+
+合并后:  10 -> 20 -> 30 -> 40 -> 50 -> 60 -> NULL  (仍然升序)
+```
+
+这是链表操作中最重要的算法之一，在归并排序（Merge Sort）中是核心步骤。
+
+#### 12.2 思路分析：双指针法
+
+用两个指针 `p` 和 `q` 分别指向链表 A 和 B 的当前节点，每次比较 `p->data` 和 `q->data`，把较小的那个接到结果链表的尾部。
+
+```cpp
+核心循环逻辑:
+
+while (p 和 q 都没遍历完) {
+    if (p->data <= q->data) {
+        把 p 接到结果末尾
+        p 前进一步
+    } else {
+        把 q 接到结果末尾
+        q 前进一步
+    }
+}
+// 循环结束后，把剩余链表直接接上
+```
+
+#### 12.3 不带哨兵节点的实现
+
+不带哨兵节点时，需要特殊处理第一个节点的选取。
+
+```cpp
+#include <iostream>
+using namespace std;
+
+struct Node {
+    int data;
+    Node* next;
+    Node(int val) : data(val), next(nullptr) {}
+};
+
+// 合并两个有序链表（不带哨兵节点）
+Node* mergeSorted(Node* headA, Node* headB) {
+    if (headA == nullptr) return headB;
+    if (headB == nullptr) return headA;
+
+    Node* resultHead = nullptr;  // 结果链表的头
+    Node* resultTail = nullptr;  // 结果链表的尾
+    Node* p = headA;
+    Node* q = headB;
+
+    // 步骤 1: 确定结果链表的第一个节点
+    if (p->data <= q->data) {
+        resultHead = resultTail = p;
+        p = p->next;
+    } else {
+        resultHead = resultTail = q;
+        q = q->next;
     }
 
-    // 1. 找到中间节点，断开链表
-    ListNode* mid = getMiddle(head);
-    ListNode* rightHalf = mid->next;
-    mid->next = nullptr;  // 断开！
-
-    // 2. 递归排序左右两半
-    ListNode* left = mergeSort(head);
-    ListNode* right = mergeSort(rightHalf);
-
-    // 3. 合并两个有序链表
-    return mergeTwoLists(left, right);
-}
-```
-
-> **📌 知识点**：`std::list::sort()` 在主流实现中通常采用归并排序（稳定，且适配链表的指针拼接）。标准主要约束的是复杂度和稳定性。
-
-#### 6.3 检测链表是否有环（快慢指针 / Floyd 判圈算法）
-
-**什么是环？**
-
-正常链表的尾节点 `next` 指向 `nullptr`。如果某个节点的 `next` 指向了前面的某个节点，就形成了一个环，遍历永远不会结束。
-
-```
-正常链表：  1 -> 2 -> 3 -> 4 -> nullptr
-
-有环链表：  1 -> 2 -> 3 -> 4
-                 ↑              |
-                 └──────────────┘
-                 4 的 next 指向 2，形成环
-```
-
-**快慢指针法：**
-
-- **慢指针（slow）**：每次走 1 步
-- **快指针（fast）**：每次走 2 步
-- 如果有环，快指针最终会追上慢指针（就像操场跑步，跑得快的人会"套圈"）
-- 如果无环，快指针会先到达 `nullptr`
-
-```
-bool hasCycle(ListNode* head) {
-    ListNode* slow = head;
-    ListNode* fast = head;
-
-    while (fast != nullptr && fast->next != nullptr) {
-        slow = slow->next;           // 慢指针走 1 步
-        fast = fast->next->next;     // 快指针走 2 步
-
-        if (slow == fast) {
-            return true;  // 相遇了，说明有环
+    // 步骤 2: 依次取较小的节点接到末尾
+    while (p != nullptr && q != nullptr) {
+        if (p->data <= q->data) {
+            resultTail->next = p;
+            resultTail = p;
+            p = p->next;
+        } else {
+            resultTail->next = q;
+            resultTail = q;
+            q = q->next;
         }
     }
 
-    return false;  // fast 到达 nullptr，说明无环
+    // 步骤 3: 接上剩余部分
+    resultTail->next = (p != nullptr) ? p : q;
+    return resultHead;
+}
+
+// 辅助函数
+Node* createList(int arr[], int n) {
+    if (n == 0) return nullptr;
+    Node* head = new Node(arr[0]);
+    Node* tail = head;
+    for (int i = 1; i < n; i++) {
+        tail->next = new Node(arr[i]);
+        tail = tail->next;
+    }
+    return head;
+}
+
+void display(Node* head) {
+    for (Node* t = head; t != nullptr; t = t->next)
+        cout << t->data << " -> ";
+    cout << "NULL" << endl;
+}
+
+int main() {
+    int arrA[] = {10, 30, 50, 70};
+    int arrB[] = {20, 40, 60};
+    Node* headA = createList(arrA, 4);
+    Node* headB = createList(arrB, 3);
+
+    cout << "链表 A: ";  display(headA);
+    cout << "链表 B: ";  display(headB);
+
+    Node* merged = mergeSorted(headA, headB);
+    cout << "合并后: ";  display(merged);
+    return 0;
 }
 ```
 
-**进阶：找到环的入口节点**
+输出：
 
+```cpp
+链表 A: 10 -> 30 -> 50 -> 70 -> NULL
+链表 B: 20 -> 40 -> 60 -> NULL
+合并后: 10 -> 20 -> 30 -> 40 -> 50 -> 60 -> 70 -> NULL
 ```
-ListNode* detectCycle(ListNode* head) {
-    ListNode* slow = head;
-    ListNode* fast = head;
 
-    // 第一阶段：判断是否有环
+#### 12.4 逐步图解（不带哨兵节点版本）
+
+以 A = {10, 30, 50}、B = {20, 40, 60} 为例。
+
+**初始状态：**
+
+```cpp
+p                                q
+|                                |
+v                                v
++------+    +------+    +------+    +------+    +------+    +------+
+|  10  |--->|  30  |--->|  50  |    |  20  |--->|  40  |--->|  60  |
++------+    +------+    +------+    +------+    +------+    +------+
+
+结果链表: resultHead = NULL,  resultTail = NULL
+```
+
+**选取第一个节点：比较 10 和 20，10 较小，将其作为结果链表的第一个节点。**
+
+```cpp
+  resultHead = resultTail = 节点 10
+  p 前进到 30
+
+结果链表:  [10] -> NULL
+剩余 A:    p -> 30 -> 50 -> NULL
+剩余 B:    q -> 20 -> 40 -> 60 -> NULL
+```
+
+**第 1 轮循环：比较 30 和 20，20 较小，将节点 20 接到结果末尾。**
+
+```cpp
+结果链表:  [10] -> [20] -> NULL
+resultTail 指向 20
+q 前进到 40
+```
+
+**第 2 轮循环：比较 30 和 40，30 较小，将节点 30 接到结果末尾。**
+
+```cpp
+结果链表:  [10] -> [20] -> [30] -> NULL
+resultTail 指向 30
+p 前进到 50
+```
+
+**第 3 轮循环：比较 50 和 40，40 较小，将节点 40 接到结果末尾。**
+
+```cpp
+结果链表:  [10] -> [20] -> [30] -> [40] -> NULL
+resultTail 指向 40
+q 前进到 60
+```
+
+**第 4 轮循环：比较 50 和 60，50 较小，将节点 50 接到结果末尾。**
+
+```cpp
+结果链表:  [10] -> [20] -> [30] -> [40] -> [50] -> NULL
+resultTail 指向 50
+p = NULL（A 已遍历完）
+```
+
+**循环结束：p 为 NULL，将 resultTail->next 指向 q（节点 60）。**
+
+```cpp
+最终结果:
+  10 -> 20 -> 30 -> 40 -> 50 -> 60 -> NULL
+
+  resultHead                                        resultTail
+    |                                                   |
+    v                                                   v
+  +------+    +------+    +------+    +------+    +------+    +------+
+  |  10  |--->|  20  |--->|  30  |--->|  40  |--->|  50  |--->|  60  |
+  +------+    +------+    +------+    +------+    +------+    +------+
+```
+
+#### 12.5 带哨兵节点的实现
+
+带哨兵节点（dummy node）可以省去"确定第一个节点"的特殊处理，代码更简洁。
+
+```cpp
+// 合并两个有序链表（带哨兵节点）
+Node* mergeSortedWithDummy(Node* headA, Node* headB) {
+    Node dummy(0);         // 哨兵节点，值不重要
+    Node* tail = &dummy;   // tail 始终指向结果链表的尾部
+    Node* p = headA;
+    Node* q = headB;
+
+    while (p != nullptr && q != nullptr) {
+        if (p->data <= q->data) {
+            tail->next = p;
+            tail = p;
+            p = p->next;
+        } else {
+            tail->next = q;
+            tail = q;
+            q = q->next;
+        }
+    }
+
+    tail->next = (p != nullptr) ? p : q;
+    return dummy.next;  // 跳过哨兵节点
+}
+```
+
+两个版本的对比：
+
+```cpp
+不带哨兵节点:
+  - 需要额外代码处理第一个节点的选取
+  - resultHead 和 resultTail 两个变量
+  - 逻辑稍复杂，容易出错
+
+带哨兵节点:
+  - 哨兵节点只占栈上的一个 int + 一个指针
+  - 统一了"第一个节点"和"后续节点"的处理逻辑
+  - 代码更短、更不容易出错
+  - 最后需要 return dummy.next 跳过哨兵
+```
+
+#### 12.6 与 Concatenation 的区别
+
+```cpp
+Concatenation (连接):
+  A: 10 -> 30 -> 50 -> NULL       B: 20 -> 40 -> 60 -> NULL
+  结果: 10 -> 30 -> 50 -> 20 -> 40 -> 60 -> NULL
+  （B 直接接在 A 后面，不保证整体有序）
+
+Merge (合并):
+  A: 10 -> 30 -> 50 -> NULL       B: 20 -> 40 -> 60 -> NULL
+  结果: 10 -> 20 -> 30 -> 40 -> 50 -> 60 -> NULL
+  （按值的大小逐一选取，保证整体有序）
+```
+
+#### 12.7 复杂度分析
+
+| 操作 | 时间复杂度 | 说明 |
+|------|-----------|------|
+| 比较并选取 | O(m+n) | m 和 n 分别是两个链表的长度 |
+| **总计** | **O(m+n)** | 每个节点最多被访问一次 |
+
+空间复杂度：O(1)。没有创建新节点，只是重新链接原有节点。
+
+---
+
+### 13. 检测链表中的循环（Cycle Detection）
+
+#### 13.1 什么是链表中的循环
+
+正常链表中，最后一个节点的 `next` 指向 `NULL`。但某些情况下，链表可能出现"环"——某个节点的 `next` 指向了链表中前面的某个节点，形成循环。
+
+**正常的链表（无环）：**
+
+```cpp
+  head
+    |
+    v
+  +------+----+     +------+----+     +------+----+     +------+----+
+  |  10  |  --+---> |  20  |  --+---> |  30  |  --+---> |  40  |NULL |
+  +------+----+     +------+----+     +------+----+     +------+----+
+
+  从任何一个节点出发，沿着 next 走，最终一定能到达 NULL。
+```
+
+**有环的链表：**
+
+```cpp
+  head
+    |
+    v
+  +------+----+     +------+----+     +------+----+     +------+
+  |  10  |  --+---> |  20  |  --+---> |  30  |  --+---> |  40  |
+  +------+----+     +------+----+     +------+----+     +--+---+
+                          ^                                  |
+                          +----------------------------------+
+
+  节点 40 的 next 指向了节点 20，而不是 NULL。
+  遍历: 10 -> 20 -> 30 -> 40 -> 20 -> 30 -> 40 -> ...  永远不会到达 NULL！
+```
+
+环通常由编程错误（修改指针时不小心让某个节点的 next 指向了前面的节点）或特殊数据结构设计（如 Josephus 环）造成。
+
+**如何创建测试用的有环链表：**
+
+```cpp
+// 创建: 10 -> 20 -> 30 -> 40 -> 50 -> (回到 20)
+Node* createCyclicList() {
+    Node* n1 = new Node(10);
+    Node* n2 = new Node(20);
+    Node* n3 = new Node(30);
+    Node* n4 = new Node(40);
+    Node* n5 = new Node(50);
+    n1->next = n2;  n2->next = n3;  n3->next = n4;
+    n4->next = n5;  n5->next = n2;  // 形成环
+    return n1;
+}
+```
+
+```cpp
+  head
+    |
+    v
+  +------+     +------+     +------+     +------+     +------+
+  |  10  |---> |  20  |---> |  30  |---> |  40  |---> |  50  |
+  +------+     +------+     +------+     +------+     +--+---+
+                   ^           环入口                      |
+                   +--------------------------------------+
+                              环长 = 4 个节点 (20,30,40,50)
+```
+
+#### 13.2 Floyd 循环检测算法（快慢指针）
+
+Floyd 判圈算法是检测链表环的经典算法。
+
+**核心思想：** 想象两个人在操场上跑步，一个跑得快，一个跑得慢。如果操场是环形的，快的人迟早会追上慢的人；如果操场不是环形的，快的人会先到达终点。
+
+- 慢指针（slow）：每次走 1 步
+- 快指针（fast）：每次走 2 步
+
+**逐步图解（有环情况）：**
+
+链表: 10 -> 20 -> 30 -> 40 -> 50 -> (回到 20)
+
+```cpp
+初始:  slow=10, fast=10
+
+第 1 轮:  slow -> 20,    fast -> 30     (fast: 10->20->30)
+          [10] [S/F] [30] [40] [50]     不相等，继续
+
+第 2 轮:  slow -> 30,    fast -> 50     (fast: 30->40->50)
+          [10] [20] [S] [40] [F]        不相等，继续
+
+第 3 轮:  slow -> 40,    fast -> 30     (fast: 50->20->30)
+          [10] [20] [F] [S] [50]        不相等，继续
+
+第 4 轮:  slow -> 50,    fast -> 50     (fast: 30->40->50)
+          [10] [20] [30] [40] [S=F]     slow == fast，检测到环！
+```
+
+**无环情况：** 链表 10 -> 20 -> 30 -> NULL
+
+```cpp
+初始:  slow=10, fast=10
+
+第 1 轮:  slow -> 20,  fast -> 30
+第 2 轮:  检查条件 fast->next != NULL → false（30->next 是 NULL），退出循环
+          结论：无环。
+```
+
+**为什么快指针一定能追上慢指针？** 每走一步，fast 和 slow 之间的距离减少 1（fast 比 slow 多走 1 步）。在环中距离最多为环长 L，所以最多 L-1 步就会相遇。
+
+**完整代码：**
+
+```cpp
+bool hasCycle(Node* head) {
+    if (head == nullptr || head->next == nullptr) return false;
+
+    Node* slow = head;
+    Node* fast = head;
+
+    while (fast != nullptr && fast->next != nullptr) {
+        slow = slow->next;          // 慢指针走 1 步
+        fast = fast->next->next;    // 快指针走 2 步
+        if (slow == fast) return true;  // 相遇，有环
+    }
+
+    return false;  // fast 到达 NULL，无环
+}
+```
+
+> 为什么条件是 `fast != NULL && fast->next != NULL`？因为 fast 每次走两步（`fast = fast->next->next`），必须保证 `fast` 和 `fast->next` 都不为 NULL，否则访问 `fast->next->next` 会段错误。
+
+#### 13.3 找到环的入口节点
+
+确认有环之后，一个重要问题是：环的入口是哪个节点？
+
+**数学推导：**
+
+```cpp
+定义:
+  a = 从 head 到环入口的步数
+  b = 从环入口到相遇点的步数
+  c = 环的周长
+
+  当 slow 和 fast 相遇时:
+    slow 走了 a + b 步
+    fast 走了 a + b + n*c 步（n 是 fast 在环中多转的圈数）
+
+  因为 fast 速度是 slow 的 2 倍:
+    2(a + b) = a + b + n*c
+    化简:     a + b = n*c
+    移项:     a = n*c - b = (n-1)*c + (c - b)
+```
+
+**等式的几何意义：**
+
+```cpp
+a = (n-1)*c + (c - b)
+
+  a = head 到环入口的距离
+  c-b = 从相遇点沿环再走回环入口的距离
+
+  如果让一个指针从 head 出发，另一个从相遇点出发，
+  两个指针每次都走 1 步，它们一定在环的入口相遇！
+```
+
+**验证：** 用链表 10 -> 20 -> 30 -> 40 -> 50 -> (回到 20) 验证。
+
+```cpp
+环入口: 节点 20,  a=1,  环 20->30->40->50->20,  c=4
+
+步骤 1: 快慢指针在节点 50 相遇（见上文图解）
+        此时 b = 3 (20->30->40->50, 3 步)
+
+步骤 2: entry 从 head(10) 出发, slow 从相遇点(50) 出发
+        第 1 步: entry = 20,  slow = 50->next = 20
+        entry == slow! 在节点 20 (环入口) 相遇。
+        验证: a=1, c-b=4-3=1，两者都走 1 步，同时到达入口。
+```
+
+再验证一个更复杂的例子：10 -> 20 -> 30 -> 40 -> 50 -> (回到 30)
+
+```cpp
+环入口: 节点 30,  a=2,  环 30->40->50->30,  c=3
+
+步骤 1 快慢指针过程:
+  初始: slow=10, fast=10
+  第 1 轮: slow=20, fast=30
+  第 2 轮: slow=30, fast=50
+  第 3 轮: slow=40, fast=40 (fast: 50->30->40)
+  相遇在节点 40,  b=1 (30->40, 1 步)
+
+步骤 2: entry 从 head(10), slow 从相遇点(40)
+  第 1 步: entry=20, slow=50 (不等)
+  第 2 步: entry=30, slow=30 (50->30)  相等！找到入口 30。
+  验证: a=2, c-b=3-1=2，两者各走 2 步，同时到达入口。
+```
+
+**完整代码：**
+
+```cpp
+Node* detectCycleEntry(Node* head) {
+    if (head == nullptr || head->next == nullptr) return nullptr;
+
+    Node* slow = head;
+    Node* fast = head;
+
     while (fast != nullptr && fast->next != nullptr) {
         slow = slow->next;
         fast = fast->next->next;
 
         if (slow == fast) {
-            // 第二阶段：找环的入口
-            // 数学证明：从 head 和相遇点同时出发，每次走 1 步，
-            // 再次相遇的地方就是环的入口
-            ListNode* p1 = head;
-            ListNode* p2 = slow;
-            while (p1 != p2) {
-                p1 = p1->next;
-                p2 = p2->next;
+            // 一个指针从 head 出发，一个从相遇点出发
+            Node* entry = head;
+            while (entry != slow) {
+                entry = entry->next;
+                slow = slow->next;
             }
-            return p1;  // 环的入口
+            return entry;  // 两者在入口相遇
         }
     }
 
@@ -889,255 +3229,1766 @@ ListNode* detectCycle(ListNode* head) {
 }
 ```
 
-**数学证明要点：**
-设从 head 到环入口距离为 `a`，环入口到相遇点距离为 `b`，环的长度为 `c`。
+#### 13.4 计算环的长度
 
-- 慢指针走了 `a + b` 步
-- 快指针走了 `a + b + n*c` 步（在环里多转了 n 圈）
-- 快指针速度是慢指针的 2 倍：`2(a+b) = a + b + n*c` → `a + b = n*c` → `a = n*c - b = (n-1)*c + (c-b)`
-- 所以从 head 走 `a` 步 = 从相遇点走 `(n-1)` 整圈 + `c-b` 步，两者恰好在环入口相遇。
+找到环中任意一个节点后，从该节点出发沿 `next` 走一圈回到自己，数经过的节点数即可。
 
-#### 6.4 合并两个有序链表
-
-```
-// 将两个升序链表合并为一个新的升序链表
-ListNode* mergeTwoLists(ListNode* l1, ListNode* l2) {
-    ListNode dummy(0);       // 栈上创建哨兵节点
-    ListNode* tail = &dummy; // tail 指向已合并部分的末尾
-
-    while (l1 != nullptr && l2 != nullptr) {
-        if (l1->data <= l2->data) {
-            tail->next = l1;
-            l1 = l1->next;
-        } else {
-            tail->next = l2;
-            l2 = l2->next;
-        }
-        tail = tail->next;
+```cpp
+int cycleLength(Node* node) {
+    if (node == nullptr) return 0;
+    Node* current = node->next;
+    int length = 1;
+    while (current != node) {
+        current = current->next;
+        length++;
     }
+    return length;
+}
+```
 
-    // 将剩余部分直接接上
-    tail->next = (l1 != nullptr) ? l1 : l2;
+**图解：** 假设相遇点在节点 40，环 40 -> 50 -> 20 -> 30 -> 40。
 
-    return dummy.next;
+```cpp
+current 从 40->next (50) 出发:
+
+  第 1 步: current = 50, length = 1
+  第 2 步: current = 20, length = 2
+  第 3 步: current = 30, length = 3
+  第 4 步: current = 40, length = 4   current == node，停止
+
+  环的长度 = 4
+```
+
+**完整检测环的程序：**
+
+```cpp
+#include <iostream>
+using namespace std;
+
+struct Node {
+    int data;
+    Node* next;
+    Node(int val) : data(val), next(nullptr) {}
+};
+
+bool hasCycle(Node* head) {
+    if (head == nullptr || head->next == nullptr) return false;
+    Node* slow = head, *fast = head;
+    while (fast != nullptr && fast->next != nullptr) {
+        slow = slow->next;
+        fast = fast->next->next;
+        if (slow == fast) return true;
+    }
+    return false;
 }
 
-// 使用示例
-// l1: 1 -> 3 -> 5
-// l2: 2 -> 4 -> 6
-// 合并后: 1 -> 2 -> 3 -> 4 -> 5 -> 6
+Node* detectCycleEntry(Node* head) {
+    if (head == nullptr || head->next == nullptr) return nullptr;
+    Node* slow = head, *fast = head;
+    while (fast != nullptr && fast->next != nullptr) {
+        slow = slow->next;
+        fast = fast->next->next;
+        if (slow == fast) {
+            Node* entry = head;
+            while (entry != slow) {
+                entry = entry->next;
+                slow = slow->next;
+            }
+            return entry;
+        }
+    }
+    return nullptr;
+}
+
+int cycleLength(Node* node) {
+    if (node == nullptr) return 0;
+    Node* current = node->next;
+    int length = 1;
+    while (current != node) {
+        current = current->next;
+        length++;
+    }
+    return length;
+}
+
+int main() {
+    Node* n1 = new Node(10);
+    Node* n2 = new Node(20);
+    Node* n3 = new Node(30);
+    Node* n4 = new Node(40);
+    Node* n5 = new Node(50);
+    n1->next = n2;  n2->next = n3;  n3->next = n4;
+    n4->next = n5;  n5->next = n2;  // 形成环
+
+    cout << "是否有环: " << (hasCycle(n1) ? "是" : "否") << endl;
+    Node* entry = detectCycleEntry(n1);
+    if (entry) cout << "环入口值: " << entry->data << endl;
+    cout << "环长度: " << cycleLength(entry) << endl;
+    return 0;
+}
 ```
 
-> **📌 注意**：这里的 `dummy` 是在**栈上**创建的（`ListNode dummy(0)` 而不是 `new ListNode(0)`），函数结束时自动销毁，不需要手动 `delete`，也不会导致内存泄漏。这是一个实用的小技巧。
+输出：
+
+```cpp
+是否有环: 是
+环入口值: 20
+环长度: 4
+```
+
+#### 13.5 复杂度分析
+
+| 算法 | 时间复杂度 | 空间复杂度 | 说明 |
+|------|-----------|-----------|------|
+| 检测有环 | O(n) | O(1) | 最多遍历整个链表 |
+| 找环入口 | O(n) | O(1) | 第二次遍历最多走 a 步 |
+| 计算环长 | O(n) | O(1) | 最多遍历环一圈 |
+
+三个操作结合，总时间复杂度 O(n)，空间复杂度 O(1)。
 
 ---
 
-## 第三阶段：双向链表（Doubly Linked List）⭐ 重点
+### 14. 链表的 C++ 类封装
 
-> **这是最核心的阶段！** `std::list` 的底层就是**带哨兵头节点的双向循环链表**。
+#### 14.1 为什么要封装
 
----
+到目前为止，我们用全局函数 + `head` 指针的方式操作链表，存在以下问题：
 
-### 7. 双向链表的结构与创建
+**问题 1: 调用者需要自己管理 head 指针**
 
-#### 7.1 prev 与 next 双指针
-
-单链表的节点只有一个 `next` 指针，只能**单方向遍历**。如果要访问前一个节点，必须从头重新遍历，非常低效。
-
-**双向链表**为每个节点增加了一个 `prev` 指针，指向前一个节点，实现了**双方向遍历**。
-
-```
-单链表：   [10] ──> [20] ──> [30] ──> nullptr
-           只能从左往右
-
-双向链表：  nullptr <── [10] ⟺ [20] ⟺ [30] ──> nullptr
-            可以双向移动
+```cpp
+Node* head = nullptr;
+head = insertAtBeginning(head, 10);
+head = insertAtEnd(head, 20);
+head = deleteNode(head, 10);
+// 容易忘记更新 head，特别是删除头节点时
 ```
 
-#### 7.2 节点定义
+**问题 2: 容易误操作**
 
+```cpp
+head = nullptr;        // 一不小心就把整个链表"丢了"
+head->next = nullptr;  // 一不小心就截断了链表
 ```
-struct DListNode {
-    int data;
-    DListNode* prev;  // 指向前一个节点
-    DListNode* next;  // 指向后一个节点
 
-    DListNode(int val) : data(val), prev(nullptr), next(nullptr) {}
+**问题 3: 没有统一的清理机制**
+
+```cpp
+// 忘记调用 deleteList(head) → 内存泄漏
+// 多次调用 → 节点被重复释放
+```
+
+**封装的好处：**
+
+- `head` 是类的私有成员，外部无法直接访问或误修改
+- 所有操作通过公共接口进行，安全且统一
+- 析构函数自动清理内存，不会忘记释放
+- 代码组织更清晰，一个类就是一个完整的数据结构
+
+#### 14.2 完整的链表类实现
+
+```cpp
+#include <iostream>
+#include <stdexcept>
+using namespace std;
+
+class LinkedList {
+private:
+    struct Node {
+        int data;
+        Node* next;
+        Node(int val) : data(val), next(nullptr) {}
+    };
+
+    Node* head;
+
+public:
+    // ---- 构造函数与析构函数 ----
+
+    LinkedList() : head(nullptr) {}
+
+    ~LinkedList() {
+        Node* current = head;
+        while (current != nullptr) {
+            Node* next = current->next;
+            delete current;
+            current = next;
+        }
+    }
+
+    // ---- 显示 ----
+
+    void display() const {
+        for (Node* t = head; t != nullptr; t = t->next)
+            cout << t->data << " -> ";
+        cout << "NULL" << endl;
+    }
+
+    // ---- 插入 ----
+
+    void insertAtBeginning(int val) {
+        Node* newNode = new Node(val);
+        newNode->next = head;
+        head = newNode;
+    }
+
+    void insertAtEnd(int val) {
+        Node* newNode = new Node(val);
+        if (head == nullptr) { head = newNode; return; }
+        Node* temp = head;
+        while (temp->next != nullptr) temp = temp->next;
+        temp->next = newNode;
+    }
+
+    void insertAt(int pos, int val) {
+        if (pos < 0) throw out_of_range("位置不能为负数");
+        if (pos == 0) { insertAtBeginning(val); return; }
+        Node* temp = head;
+        for (int i = 0; i < pos - 1; i++) {
+            if (temp == nullptr) throw out_of_range("位置超出链表长度");
+            temp = temp->next;
+        }
+        if (temp == nullptr) throw out_of_range("位置超出链表长度");
+        Node* newNode = new Node(val);
+        newNode->next = temp->next;
+        temp->next = newNode;
+    }
+
+    // ---- 删除 ----
+
+    bool deleteNode(int val) {
+        if (head == nullptr) return false;
+        if (head->data == val) {
+            Node* toDelete = head;
+            head = head->next;
+            delete toDelete;
+            return true;
+        }
+        Node* temp = head;
+        while (temp->next != nullptr && temp->next->data != val)
+            temp = temp->next;
+        if (temp->next == nullptr) return false;
+        Node* toDelete = temp->next;
+        temp->next = toDelete->next;
+        delete toDelete;
+        return true;
+    }
+
+    bool deleteAt(int pos) {
+        if (head == nullptr || pos < 0) return false;
+        if (pos == 0) {
+            Node* toDelete = head;
+            head = head->next;
+            delete toDelete;
+            return true;
+        }
+        Node* temp = head;
+        for (int i = 0; i < pos - 1; i++) {
+            if (temp->next == nullptr) return false;
+            temp = temp->next;
+        }
+        if (temp->next == nullptr) return false;
+        Node* toDelete = temp->next;
+        temp->next = toDelete->next;
+        delete toDelete;
+        return true;
+    }
+
+    // ---- 查找 ----
+
+    bool search(int val) const {
+        for (Node* t = head; t != nullptr; t = t->next)
+            if (t->data == val) return true;
+        return false;
+    }
+
+    // ---- 统计与计算 ----
+
+    int length() const {
+        int count = 0;
+        for (Node* t = head; t != nullptr; t = t->next) count++;
+        return count;
+    }
+
+    int sum() const {
+        int total = 0;
+        for (Node* t = head; t != nullptr; t = t->next) total += t->data;
+        return total;
+    }
+
+    int max() const {
+        if (head == nullptr) throw runtime_error("链表为空");
+        int maxVal = head->data;
+        for (Node* t = head->next; t != nullptr; t = t->next)
+            if (t->data > maxVal) maxVal = t->data;
+        return maxVal;
+    }
+
+    // ---- 整理 ----
+
+    void reverse() {
+        Node* prev = nullptr;
+        Node* current = head;
+        while (current != nullptr) {
+            Node* next = current->next;
+            current->next = prev;
+            prev = current;
+            current = next;
+        }
+        head = prev;
+    }
+
+    bool isSorted() const {
+        if (head == nullptr || head->next == nullptr) return true;
+        for (Node* t = head; t->next != nullptr; t = t->next)
+            if (t->data > t->next->data) return false;
+        return true;
+    }
+
+    void removeDuplicates() {
+        if (head == nullptr || head->next == nullptr) return;
+        Node* current = head;
+        while (current->next != nullptr) {
+            if (current->data == current->next->data) {
+                Node* toDelete = current->next;
+                current->next = toDelete->next;
+                delete toDelete;
+            } else {
+                current = current->next;
+            }
+        }
+    }
+
+    // ---- 高级操作 ----
+
+    // 连接：将 other 接到本链表末尾，other 变为空
+    void concatenate(LinkedList& other) {
+        if (other.head == nullptr) return;
+        if (head == nullptr) {
+            head = other.head;
+            other.head = nullptr;
+            return;
+        }
+        Node* tail = head;
+        while (tail->next != nullptr) tail = tail->next;
+        tail->next = other.head;
+        other.head = nullptr;  // 转移所有权，防止 other 析构时释放这些节点
+    }
+
+    // 合并有序链表（本链表也必须有序），合并后 other 变为空
+    void mergeSorted(LinkedList& other) {
+        Node dummy(0);
+        Node* tail = &dummy;
+        Node* p = head, *q = other.head;
+
+        while (p != nullptr && q != nullptr) {
+            if (p->data <= q->data) {
+                tail->next = p; tail = p; p = p->next;
+            } else {
+                tail->next = q; tail = q; q = q->next;
+            }
+        }
+        tail->next = (p != nullptr) ? p : q;
+        head = dummy.next;
+        other.head = nullptr;  // 转移所有权
+    }
 };
 ```
 
-#### 7.3 双向链表的创建
+**类的设计要点说明：**
 
+```cpp
+1. Node 定义在 private 中
+   - 外部代码无法直接创建或访问 Node
+   - 隐藏了实现细节，只暴露操作接口
+
+2. head 是私有成员
+   - 外部代码无法直接修改 head
+   - 防止误操作导致链表被破坏
+
+3. 构造函数 LinkedList()
+   - 使用初始化列表 : head(nullptr) 创建空链表
+
+4. 析构函数 ~LinkedList()
+   - 遍历所有节点，逐个 delete
+   - 对象离开作用域时自动调用，不需要手动清理
+   - 这是封装的最大好处之一
+
+5. concatenate 和 mergeSorted 接收 LinkedList& 引用
+   - 连接/合并后，将 other 的 head 置为 nullptr
+   - 防止 other 的析构函数释放已被转移的节点
+   - 避免同一个节点被 delete 两次
+
+6. const 成员函数
+   - display, search, length, sum, max, isSorted 标记为 const
+   - 表示这些函数不会修改链表内容
+   - 允许对 const LinkedList 对象调用
 ```
-// 尾插法创建双向链表
-DListNode* createDoublyList(const std::vector<int>& arr) {
-    if (arr.empty()) return nullptr;
 
-    DListNode* head = new DListNode(arr[0]);
-    DListNode* tail = head;
+#### 14.3 使用示例
 
-    for (size_t i = 1; i < arr.size(); ++i) {
-        DListNode* newNode = new DListNode(arr[i]);
-        tail->next = newNode;   // 当前尾节点的 next 指向新节点
-        newNode->prev = tail;   // 新节点的 prev 指向当前尾节点
-        tail = newNode;         // 更新尾指针
+```cpp
+int main() {
+    // --- 基本操作 ---
+    LinkedList list;
+    list.insertAtEnd(10);
+    list.insertAtEnd(20);
+    list.insertAtEnd(30);
+    list.insertAtBeginning(5);
+    list.insertAt(2, 15);
+    list.display();       // 5 -> 10 -> 15 -> 20 -> 30 -> NULL
+    cout << "长度=" << list.length()  // 5
+         << " 总和=" << list.sum()    // 80
+         << " 最大=" << list.max()    // 30
+         << endl;
+
+    // --- 查找与删除 ---
+    cout << "查找 15: " << (list.search(15) ? "找到" : "未找到") << endl;
+    list.deleteNode(15);
+    list.deleteAt(0);
+    list.display();       // 10 -> 20 -> 30 -> NULL
+
+    // --- 反转 ---
+    list.reverse();
+    list.display();       // 30 -> 20 -> 10 -> NULL
+
+    // --- 去重 ---
+    LinkedList sorted;
+    for (int v : {1, 2, 2, 3, 3, 3}) sorted.insertAtEnd(v);
+    sorted.display();     // 1 -> 2 -> 2 -> 3 -> 3 -> 3 -> NULL
+    sorted.removeDuplicates();
+    sorted.display();     // 1 -> 2 -> 3 -> NULL
+
+    // --- 连接 ---
+    LinkedList a, b;
+    for (int v : {1, 2, 3}) a.insertAtEnd(v);
+    for (int v : {4, 5})   b.insertAtEnd(v);
+    a.concatenate(b);
+    a.display();          // 1 -> 2 -> 3 -> 4 -> 5 -> NULL
+
+    // --- 合并有序链表 ---
+    LinkedList m, n;
+    for (int v : {1, 3, 5}) m.insertAtEnd(v);
+    for (int v : {2, 4, 6}) n.insertAtEnd(v);
+    m.mergeSorted(n);
+    m.display();          // 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> NULL
+
+    return 0;
+    // 离开作用域时，各 LinkedList 的析构函数自动释放内存
+}
+```
+
+**封装前后对比：**
+
+```cpp
+封装前（全局函数风格）:
+
+  Node* head = nullptr;
+  head = insertAtBeginning(head, 10);
+  head = deleteNode(head, 10);
+  // 必须手动管理 head，用完必须手动 deleteList(head)
+  // head 被意外覆盖 → 内存泄漏
+
+
+封装后（类风格）:
+
+  LinkedList list;
+  list.insertAtBeginning(10);
+  list.deleteNode(10);
+  // head 由类内部管理，不会被意外修改
+  // list 离开作用域时，析构函数自动释放内存
+```
+
+封装是 C++ 面向对象的核心思想之一。通过将数据（head）和操作（insert、delete 等）绑定在一起，我们得到了一个安全、易用、自管理的链表数据结构。后续的数据结构（栈、队列、树等）都会采用类似的封装方式。
+## 第五阶段：循环链表（Circular Linked List）
+
+> 这是视频系列中非常重要的内容。循环链表是单链表的变体，尾节点不再指向 nullptr，而是指回头节点。
+
+---
+
+### 15. 循环链表的概念与创建
+
+#### 15.1 什么是循环链表
+
+循环链表（Circular Linked List）是一种特殊的单链表。它与普通单链表的唯一区别是：**尾节点的 `next` 指针不指向 `nullptr`，而是指回头节点**，形成一个"环"。
+
+**普通单链表的结构：**
+
+```text
+head                                         tail
+  |                                           |
+  v                                           v
++---+---+    +---+---+    +---+---+    +---+------+
+| 1 | --+--->| 2 | --+--->| 3 | --+--->| 4 | NULL |
++---+---+    +---+---+    +---+---+    +---+------+
+```
+
+尾节点（值为 4）的 `next` 是 `nullptr`，链表到此结束。
+
+**循环链表的结构：**
+
+```text
+          +-------------------------------------------+
+          |                                           |
+          v                                           |
+head      |  tail                                     |
+  |       |   |                                       |
+  v       |   v                                       |
++---+---+ | +---+---+    +---+---+    +---+---+      |
+| 1 | --+-+ | 2 | --+--->| 3 | --+--->| 4 | --+------+
++---+---+   +---+---+    +---+---+    +---+---+
+```
+
+尾节点（值为 4）的 `next` 指回了头节点（值为 1），形成闭环。
+
+**核心特点：**
+
+- 从任何一个节点出发，沿着 `next` 指针走，最终都能回到起点，遍历整条链表
+- 没有"终点"（没有 `nullptr`），所以遍历时必须自己判断何时停止
+- 空循环链表：`head == nullptr`，此时不存在任何节点，也不存在环
+
+**循环链表 vs 普通链表对比：**
+
+```text
+普通单链表：                              循环链表：
+  head -> 1 -> 2 -> 3 -> NULL             head -> 1 -> 2 -> 3 -+
+                                        ^                      |
+                                        +----------------------+
+
+访问尾节点后：无路可走（NULL）              访问尾节点后：回到头节点，继续循环
+```
+
+**什么时候用循环链表？**
+
+- 约瑟夫环问题（N 个人围成一圈报数）
+- 操作系统中的轮转调度（Round-Robin Scheduling）
+- 需要反复循环处理数据的场景（如音乐播放列表循环播放）
+
+#### 15.2 循环链表的创建（尾插法）
+
+循环链表的创建和普通链表基本一样，唯一区别是：**创建完成后，把尾节点的 `next` 指回 `head`**。
+
+**思路分析：**
+
+1. 逐个读入数据，用尾插法创建节点并链接
+2. 全部插入完成后，令 `tail->next = head`，形成环
+
+**完整代码：**
+
+```cpp
+#include <iostream>
+using namespace std;
+
+// 节点结构体（与单链表完全相同）
+struct Node {
+    int data;
+    Node* next;
+    Node(int val) : data(val), next(nullptr) {}
+};
+
+// 用尾插法创建循环链表
+Node* createCircularList(int arr[], int n) {
+    if (n == 0) return nullptr;
+
+    Node* head = new Node(arr[0]);
+    Node* tail = head;
+
+    for (int i = 1; i < n; i++) {
+        tail->next = new Node(arr[i]);
+        tail = tail->next;
     }
+
+    // 关键步骤：尾节点 next 指回头节点，形成环
+    tail->next = head;
 
     return head;
 }
+
+int main() {
+    int arr[] = {1, 2, 3, 4, 5};
+    int n = 5;
+    Node* head = createCircularList(arr, n);
+
+    // 此时 head 指向值为 1 的节点，尾节点（值为 5）的 next 指回 head
+    cout << "head->data = " << head->data << endl;
+    // 验证循环：尾节点的 next 应该等于 head
+    Node* tail = head;
+    while (tail->next != head) {
+        tail = tail->next;
+    }
+    cout << "tail->data = " << tail->data << endl;
+    cout << "tail->next == head ? " << (tail->next == head ? "true" : "false") << endl;
+
+    return 0;
+}
+```
+
+```text
+输出：
+head->data = 1
+tail->data = 5
+tail->next == head ? true
+```
+
+**逐步图解（创建过程）：**
+
+第 1 步：创建第一个节点
+
+```text
+head
+  |
+  v
++---+------+
+| 1 | NULL |
++---+------+
+tail
+```
+
+第 2 步：插入值为 2 的节点（普通尾插）
+
+```text
+head    tail
+  |       |
+  v       v
++---+---+ +---+------+
+| 1 | --+>| 2 | NULL |
++---+---+ +---+------+
+```
+
+第 3 步：插入值为 3 的节点（普通尾插）
+
+```text
+head          tail
+  |             |
+  v             v
++---+---+   +---+---+   +---+------+
+| 1 | --+-->| 2 | --+-->| 3 | NULL |
++---+---+   +---+---+   +---+------+
+```
+
+第 4 步：`tail->next = head`，形成环
+
+```text
+          +----------------------------+
+          |                            |
+          v                            |
+head      |  tail                      |
+  |       |   |                        |
+  v       |   v                        |
++---+---+ | +---+---+   +---+---+     |
+| 1 | --+-+ | 2 | --+-->| 3 | --+-----+
++---+---+   +---+---+   +---+---+
+```
+
+尾节点的 `next` 从 `nullptr` 变成了 `head`，环形成。
+
+**复杂度分析：**
+
+| 操作 | 时间复杂度 | 说明 |
+|------|-----------|------|
+| 创建 n 个节点 | O(n) | 遍历数组一次 |
+| 形成环（`tail->next = head`） | O(1) | 只需一次指针赋值 |
+| 总计 | O(n) | |
+
+---
+
+### 16. 显示循环链表
+
+#### 16.1 迭代显示
+
+**核心问题：** 普通链表用 `while (curr != nullptr)` 来遍历。但循环链表没有 `nullptr`，如果还用这个条件，程序会**死循环**。
+
+**错误写法（会死循环！）：**
+
+```cpp
+// 错误！循环链表中没有 nullptr，这个循环永远停不下来
+void displayWrong(Node* head) {
+    Node* curr = head;
+    while (curr != nullptr) {  // 永远为 true，死循环！
+        cout << curr->data << " ";
+        curr = curr->next;
+    }
+}
+```
+
+**正确做法：** 使用 `do-while` 循环，先处理当前节点，再前进，当 `curr` 回到 `head` 时停止。
+
+**为什么用 `do-while` 而不是 `while`？**
+
+- `while` 循环：先判断条件，再执行。如果链表为空（`head == nullptr`），`curr` 一开始就是 `nullptr`，`curr != head`（`nullptr != nullptr`）为 `false`，循环不执行，这倒是没问题。
+- 但如果我们用 `while (curr != head)` 且链表非空，`curr` 初始值是 `head`，条件 `curr != head` 一开始就是 `false`，循环**一次都不执行**！
+- `do-while` 先执行循环体，再判断条件。第一次一定会执行，当 `curr` 走完一圈回到 `head` 时才停止。
+
+**完整代码：**
+
+```cpp
+#include <iostream>
+using namespace std;
+
+struct Node {
+    int data;
+    Node* next;
+    Node(int val) : data(val), next(nullptr) {}
+};
+
+// 迭代显示循环链表
+void displayCircular(Node* head) {
+    if (head == nullptr) {
+        cout << "链表为空" << endl;
+        return;
+    }
+
+    Node* curr = head;
+    do {
+        cout << curr->data << " -> ";
+        curr = curr->next;
+    } while (curr != head);  // 回到 head 时停止
+
+    cout << "(回到头节点 " << head->data << ")" << endl;
+}
+
+int main() {
+    int arr[] = {10, 20, 30, 40};
+    int n = 4;
+
+    // 手动创建循环链表
+    Node* head = new Node(arr[0]);
+    Node* tail = head;
+    for (int i = 1; i < n; i++) {
+        tail->next = new Node(arr[i]);
+        tail = tail->next;
+    }
+    tail->next = head;  // 形成环
+
+    displayCircular(head);
+    return 0;
+}
+```
+
+```text
+输出：
+10 -> 20 -> 30 -> 40 -> (回到头节点 10)
+```
+
+**逐步图解（遍历过程）：**
+
+初始状态，`curr = head`：
+
+```text
+curr
+  |
+  v
++----+---+    +----+---+    +----+---+    +----+---+
+| 10 | --+--->| 20 | --+--->| 30 | --+--->| 40 | --+---> (回到 10)
++----+---+    +----+---+    +----+---+    +----+---+
+```
+
+第 1 次循环：输出 `10`，`curr` 前进到 20
+
+```text
+             curr
+              |
+              v
++----+---+    +----+---+    +----+---+    +----+---+
+| 10 | --+--->| 20 | --+--->| 30 | --+--->| 40 | --+---> (回到 10)
++----+---+    +----+---+    +----+---+    +----+---+
+```
+
+第 2 次循环：输出 `20`，`curr` 前进到 30
+第 3 次循环：输出 `30`，`curr` 前进到 40
+第 4 次循环：输出 `40`，`curr` 前进到 10（即 `head`）
+
+```text
+curr (= head，回到起点)
+  |
+  v
++----+---+    +----+---+    +----+---+    +----+---+
+| 10 | --+--->| 20 | --+--->| 30 | --+--->| 40 | --+---> (回到 10)
++----+---+    +----+---+    +----+---+    +----+---+
+```
+
+此时 `curr == head`，条件 `curr != head` 为 `false`，循环结束。
+
+**复杂度：** O(n)，每个节点访问一次。
+
+#### 16.2 递归显示
+
+递归显示循环链表需要额外的参数来记录 `head`，因为递归终止条件不是 `curr == nullptr`，而是 `curr == head`。
+
+**完整代码：**
+
+```cpp
+// 递归显示循环链表
+// curr：当前节点，head：头节点（用于判断是否走完一圈）
+void displayRecursive(Node* curr, Node* head) {
+    // 防御性检查：空链表直接返回
+    if (curr == nullptr) return;
+
+    // 终止条件：走完一圈，回到 head
+    if (curr != head && curr->next == head) {
+        // 当前是最后一个节点，输出后递归回来打印 head 标记
+        cout << curr->data << " -> (回到头节点 " << head->data << ")" << endl;
+        return;
+    }
+
+    // 如果回到起点（第一次调用时 curr == head，走完一圈后也会到这里）
+    if (curr == head && curr->next == head) {
+        // 只有一个节点的情况
+        cout << curr->data << " -> (回到头节点 " << head->data << ")" << endl;
+        return;
+    }
+
+    cout << curr->data << " -> ";
+    displayRecursive(curr->next, head);
+}
+
+// 更简洁的写法：用首次调用标记
+void displayRecursiveSimple(Node* curr, Node* head, bool isFirst) {
+    if (curr == nullptr) return;
+
+    cout << curr->data << " -> ";
+
+    // 如果下一个是 head 并且不是首次调用（说明已经走了一圈）
+    // 或者：只要下一个不是 head 就继续
+    if (curr->next != head) {
+        displayRecursiveSimple(curr->next, head, false);
+    } else {
+        cout << "(回到头节点 " << head->data << ")" << endl;
+    }
+}
+```
+
+**复杂度：** O(n)，递归深度为 n，需要 O(n) 的栈空间。
+
+---
+
+### 17. 在循环链表中插入
+
+#### 17.1 在头部插入
+
+在循环链表头部插入节点，比普通链表多一步：**需要找到尾节点，把尾节点的 `next` 指向新节点**。
+
+**思路分析：**
+
+1. 创建新节点 `newNode`
+2. 新节点的 `next` 指向原来的 `head`
+3. 找到尾节点（`tail->next == head` 的那个节点）
+4. 尾节点的 `next` 指向新节点
+5. 更新 `head = newNode`
+
+**特殊情况：** 空链表时，新节点自己指向自己。
+
+**完整代码：**
+
+```cpp
+// 在循环链表头部插入
+Node* insertAtHead(Node* head, int val) {
+    Node* newNode = new Node(val);
+
+    // 情况 1：空链表
+    if (head == nullptr) {
+        newNode->next = newNode;  // 自己指向自己，形成单节点环
+        return newNode;
+    }
+
+    // 情况 2：非空链表
+    // 第一步：找到尾节点
+    Node* tail = head;
+    while (tail->next != head) {
+        tail = tail->next;
+    }
+
+    // 第二步：新节点 next 指向原 head
+    newNode->next = head;
+
+    // 第三步：尾节点 next 指向新节点
+    tail->next = newNode;
+
+    // 第四步：更新 head
+    return newNode;
+}
+```
+
+**逐步图解（非空链表）：**
+
+初始状态（循环链表：10 -> 20 -> 30）：
+
+```text
+          +-------------------------------+
+          |                               |
+          v                               |
+head      |           tail                |
+  |       |            |                  |
+  v       |            v                  |
++----+---+|  +----+---+    +----+---+     |
+| 10 | --++  | 20 | --+--->| 30 | --+-----+
++----+---+   +----+---+    +----+---+
+```
+
+第 1 步：创建新节点（值为 5）
+
+```text
+newNode
+  |
+  v
++---+------+
+| 5 | NULL |
++---+------+
+```
+
+第 2 步：`newNode->next = head`（新节点指向原头节点 10）
+
+```text
+newNode
+  |
+  v
++---+---+    +----+---+    +----+---+    +----+---+
+| 5 | --+--->| 10 | --+--->| 20 | --+--->| 30 | --+---> (回到 10)
++---+---+    +----+---+    +----+---+    +----+---+
+             ^                                      |
+             +--------------------------------------+
+```
+
+第 3 步：`tail->next = newNode`（尾节点 30 指向新节点 5）
+
+```text
+          +------------------------------------------+
+          |                                          |
+          v                                          |
++---+---+    +----+---+    +----+---+    +----+---+  |
+| 5 | --+--->| 10 | --+--->| 20 | --+--->| 30 | --+--+
++---+---+    +----+---+    +----+---+    +----+---+
+```
+
+第 4 步：`head = newNode`（更新头指针）
+
+```text
+head
+  |
+  v
++---+---+    +----+---+    +----+---+    +----+---+
+| 5 | --+--->| 10 | --+--->| 20 | --+--->| 30 | --+--+
++---+---+    +----+---+    +----+---+    +----+---+
+^                                                  |
++--------------------------------------------------+
+```
+
+完成！新链表为：5 -> 10 -> 20 -> 30（循环）。
+
+**复杂度：** O(n)，因为需要遍历找到尾节点。
+
+> 注意：如果维护一个 `tail` 指针（或用双向循环链表），可以优化到 O(1)。
+
+#### 17.2 在指定位置插入
+
+**思路分析：**
+
+在位置 `pos`（从 0 开始）插入新节点：
+1. 如果 `pos == 0`，相当于在头部插入
+2. 否则，找到第 `pos - 1` 个节点（前驱节点），在它后面插入
+
+**完整代码：**
+
+```cpp
+// 在循环链表的指定位置插入
+Node* insertAtPosition(Node* head, int val, int pos) {
+    Node* newNode = new Node(val);
+
+    // 在头部插入
+    if (pos == 0 || head == nullptr) {
+        if (head == nullptr) {
+            newNode->next = newNode;
+            return newNode;
+        }
+        // 找尾节点
+        Node* tail = head;
+        while (tail->next != head) {
+            tail = tail->next;
+        }
+        newNode->next = head;
+        tail->next = newNode;
+        return newNode;
+    }
+
+    // 找到第 pos-1 个节点
+    Node* curr = head;
+    for (int i = 0; i < pos - 1; i++) {
+        curr = curr->next;
+        // 如果已经回到 head，说明 pos 超出范围
+        if (curr == head) {
+            cout << "位置 " << pos << " 超出范围" << endl;
+            delete newNode;
+            return head;
+        }
+    }
+
+    // 在 curr 后面插入 newNode
+    newNode->next = curr->next;
+    curr->next = newNode;
+
+    return head;
+}
+```
+
+**复杂度：** O(n)，最坏情况需要遍历到尾节点。
+
+#### 17.3 在有序循环链表中插入
+
+给定一个升序排列的循环链表，插入新节点后仍保持升序。
+
+**三种情况：**
+
+1. **空链表：** 新节点自己成环
+2. **新节点比所有节点都小（或等于最小）：** 插入到头部之前
+3. **新节点插在中间或尾部：** 找到第一个比它大的节点，插在前面
+
+**完整代码：**
+
+```cpp
+// 在有序循环链表中插入（保持升序）
+Node* insertSorted(Node* head, int val) {
+    Node* newNode = new Node(val);
+
+    // 情况 1：空链表
+    if (head == nullptr) {
+        newNode->next = newNode;
+        return newNode;
+    }
+
+    // 情况 2：新节点应该成为新的头节点
+    // （val <= head->data，或链表中所有节点都比 val 小）
+    if (val <= head->data) {
+        // 找尾节点
+        Node* tail = head;
+        while (tail->next != head) {
+            tail = tail->next;
+        }
+        newNode->next = head;
+        tail->next = newNode;
+        return newNode;  // 新节点成为新 head
+    }
+
+    // 情况 3：在链表中间或尾部找到合适位置
+    Node* curr = head;
+    // 找到第一个比 val 大的节点的前驱
+    while (curr->next != head && curr->next->data <= val) {
+        curr = curr->next;
+    }
+
+    // 在 curr 后面插入
+    newNode->next = curr->next;
+    curr->next = newNode;
+
+    return head;
+}
+```
+
+**图解（情况 3，在中间插入）：**
+
+有序循环链表：10 -> 20 -> 30 -> 40（循环），插入 25。
+
+第 1 步：从 head 开始，找第一个 `data > 25` 的节点的前驱。
+
+```text
+curr=10: 10->next=20, 20<=25，继续
+curr=20: 20->next=30, 30>25，停！curr=20 就是插入位置的前驱
+```
+
+第 2 步：在 20 后面插入 25。
+
+```text
+插入前：10 -> 20 -> 30 -> 40 -+ (回到 10)
+                              |
+            +-----------------+
+            |
+            v
+插入后：10 -> 20 -> 25 -> 30 -> 40 -+ (回到 10)
+                                    |
+            +-----------------------+
+            |
+            v
+```
+
+**复杂度：** O(n)，最坏情况插入到尾部。
+
+---
+
+### 18. 从循环链表中删除
+
+#### 18.1 删除头节点
+
+删除头节点比普通链表多一步：**需要找到尾节点，让尾节点的 `next` 指向新的头节点**。
+
+**思路分析：**
+
+1. 如果链表为空，无法删除
+2. 如果链表只有一个节点，删除后 `head = nullptr`
+3. 否则：找到尾节点，`tail->next = head->next`，释放原 `head`，`head = head->next`
+
+**完整代码：**
+
+```cpp
+// 删除循环链表的头节点
+Node* deleteHead(Node* head) {
+    // 空链表
+    if (head == nullptr) {
+        cout << "链表为空，无法删除" << endl;
+        return nullptr;
+    }
+
+    // 只有一个节点
+    if (head->next == head) {
+        delete head;
+        return nullptr;
+    }
+
+    // 多个节点
+    // 第一步：找到尾节点
+    Node* tail = head;
+    while (tail->next != head) {
+        tail = tail->next;
+    }
+
+    // 第二步：尾节点 next 指向新头节点
+    Node* newHead = head->next;
+    tail->next = newHead;
+
+    // 第三步：释放原头节点
+    delete head;
+
+    // 第四步：返回新头节点
+    return newHead;
+}
+```
+
+**图解（多节点情况）：**
+
+删除前（链表：10 -> 20 -> 30，循环）：
+
+```text
+head
+  |
+  v
++----+---+    +----+---+    +----+---+
+| 10 | --+--->| 20 | --+--->| 30 | --+---> (回到 10)
++----+---+    +----+---+    +----+---+
+^                                |
++--------------------------------+
+```
+
+第 1 步：找到尾节点（值为 30）
+
+```text
+head         tail
+  |            |
+  v            v
++----+---+    +----+---+    +----+---+
+| 10 | --+--->| 20 | --+--->| 30 | --+---> (回到 10)
++----+---+    +----+---+    +----+---+
+```
+
+第 2 步：`tail->next = head->next`（尾节点指向 20）
+
+```text
++----+---+    +----+---+    +----+---+
+| 10 | --+--->| 20 | --+--->| 30 | --+---> (到 20)
++----+---+    ^  +----+---+   +----+---+
+              |
+              +-------------------------+
+```
+
+第 3 步：释放原头节点（值为 10）
+
+```text
+             newHead    tail
+               |          |
+               v          v
+             +----+---+   +----+---+
+             | 20 | --+-->| 30 | --+--> (回到 20)
+             +----+---+   +----+---+
+             ^                    |
+             +--------------------+
+```
+
+完成！新链表为：20 -> 30（循环）。
+
+**复杂度：** O(n)，需要遍历找到尾节点。
+
+#### 18.2 删除指定位置的节点
+
+**思路分析：**
+
+删除位置 `pos`（从 0 开始）的节点：
+1. 如果 `pos == 0`，相当于删除头节点
+2. 否则，找到第 `pos - 1` 个节点（前驱），删除它的下一个节点
+
+**完整代码：**
+
+```cpp
+// 删除循环链表指定位置的节点
+Node* deleteAtPosition(Node* head, int pos) {
+    if (head == nullptr) {
+        cout << "链表为空" << endl;
+        return nullptr;
+    }
+
+    // 删除头节点
+    if (pos == 0) {
+        return deleteHead(head);
+    }
+
+    // 找到第 pos-1 个节点
+    Node* curr = head;
+    for (int i = 0; i < pos - 1; i++) {
+        curr = curr->next;
+        if (curr == head) {
+            cout << "位置 " << pos << " 超出范围" << endl;
+            return head;
+        }
+    }
+
+    // 检查要删除的节点是否存在
+    if (curr->next == head) {
+        cout << "位置 " << pos << " 超出范围" << endl;
+        return head;
+    }
+
+    // 删除 curr->next
+    Node* toDelete = curr->next;
+    curr->next = toDelete->next;
+    delete toDelete;
+
+    return head;
+}
+```
+
+**复杂度：** O(n)，最坏情况遍历到倒数第二个节点。
+
+#### 18.3 按值删除节点
+
+删除循环链表中第一个值等于 `val` 的节点。
+
+**思路分析：**
+
+1. 如果 `head->data == val`，删除头节点
+2. 否则遍历链表，找到值为 `val` 的节点的前驱，然后删除
+
+**完整代码：**
+
+```cpp
+// 按值删除循环链表中的节点
+Node* deleteByValue(Node* head, int val) {
+    if (head == nullptr) {
+        cout << "链表为空" << endl;
+        return nullptr;
+    }
+
+    // 要删除的是头节点
+    if (head->data == val) {
+        return deleteHead(head);
+    }
+
+    // 遍历找值为 val 的节点的前驱
+    Node* curr = head;
+    while (curr->next != head) {
+        if (curr->next->data == val) {
+            Node* toDelete = curr->next;
+            curr->next = toDelete->next;
+            delete toDelete;
+            cout << "已删除值为 " << val << " 的节点" << endl;
+            return head;
+        }
+        curr = curr->next;
+    }
+
+    cout << "未找到值为 " << val << " 的节点" << endl;
+    return head;
+}
+```
+
+**图解（删除值为 20 的节点）：**
+
+删除前：
+
+```text
+          +------------------------------------------+
+          |                                          |
+          v                                          |
+head      |         curr                             |
+  |       |          |                               |
+  v       |          v                               |
++----+---+| +----+---+    +----+---+    +----+---+   |
+| 10 | --++ | 20 | --+--->| 30 | --+--->| 40 | --+--+
++----+---+  +----+---+    +----+---+    +----+---+
+```
+
+`curr = 10`，`curr->next->data == 20 == val`，找到目标。
+
+```text
+toDelete = curr->next（即值为 20 的节点）
+curr->next = toDelete->next（即 10 的 next 指向 30）
+delete toDelete
+```
+
+删除后：
+
+```text
+          +-------------------------------+
+          |                               |
+          v                               |
+head                                tail  |
+  |                                   |   |
+  v                                   v   |
++----+---+    +----+---+    +----+---+    |
+| 10 | --+--->| 30 | --+--->| 40 | --+----+
++----+---+    +----+---+    +----+---+
+```
+
+完成！链表变为：10 -> 30 -> 40（循环）。
+
+**复杂度：** O(n)，最坏情况遍历整条链表。
+
+---
+
+## 第六阶段：双向链表（Doubly Linked List）
+
+### 第六阶段：双向链表（Doubly Linked List）
+
+---
+
+### 19. 双向链表的结构与创建
+
+#### 19.1 为什么需要双向链表
+
+单链表有一个明显缺点：**只能向后走，不能向前走**。
+
+**单链表的前驱访问问题：**
+
+```text
+要访问节点 30 的前一个节点（值为 20），必须从 head 开始重新遍历：
+
+head -> 10 -> 20 -> 30 -> 40 -> NULL
+                    ^
+                    |
+                   当前位置，想访问前一个节点 20
+                   只能从 head 重新走：head -> 10 -> 20
+
+时间复杂度：O(n)
+```
+
+如果有 `prev` 指针，就能直接 O(1) 访问前驱。
+
+**双向链表的优势：**
+
+```text
+NULL <- 10 <-> 20 <-> 30 <-> 40 -> NULL
+head                               tail
+
+从 30 向前：30->prev == 20，O(1)
+从 30 向后：30->next == 40，O(1)
+```
+
+#### 19.2 节点定义
+
+双向链表的每个节点有三个部分：
+
+```text
++------+------+------+
+| prev | data | next |
++------+------+------+
+```
+
+- `prev`：指向前一个节点的指针
+- `data`：存储的数据
+- `next`：指向后一个节点的指针
+
+```cpp
+struct DNode {
+    int data;
+    DNode* prev;  // 指向前一个节点
+    DNode* next;  // 指向后一个节点
+    DNode(int val) : data(val), prev(nullptr), next(nullptr) {}
+};
 ```
 
 **内存结构图：**
 
-```
-创建 {10, 20, 30}：
+```text
+双向链表：10 <-> 20 <-> 30
 
-   nullptr                                       nullptr
-     ↑                                              ↑
-  ┌──┴──┬────┬────┐    ┌────┬────┬────┐    ┌────┬────┬──┴──┐
-  │prev │ 10 │next├───>│prev│ 20 │next├───>│prev│ 30 │next │
-  │     │    │    │<───┤    │    │    │<───┤    │    │     │
-  └─────┴────┴────┘    └────┴────┴────┘    └────┴────┴─────┘
-    head                                          tail
+NULL <--- +----+----+----+    +----+----+----+    +----+----+----+
+          |NULL| 10 |  -+--->| <--+ 20 |  -+--->| <--+ 30 |NULL|
+          +----+----+----+    +----+----+----+    +----+----+----+
+               ^                   |   ^                |
+               |                   |   |                |
+               +-------------------+   +----------------+
 ```
+
+更清晰的示意：
+
+```text
+  +----+----+----+      +----+----+----+      +----+----+----+
+  |prev| 10 |next| <--> |prev| 20 |next| <--> |prev| 30 |next|
+  +----+----+----+      +----+----+----+      +----+----+----+
+  |NULL|    |  -------->|<-- |    |  -------->|<-- |    |NULL|
+  +----+----+----+      +----+----+----+      +----+----+----+
+```
+
+#### 19.3 双向链表的创建（尾插法）
+
+**思路分析：**
+
+1. 创建第一个节点，`head` 和 `tail` 都指向它
+2. 每次插入新节点时：
+   - `tail->next = newNode`（旧尾节点的 next 指向新节点）
+   - `newNode->prev = tail`（新节点的 prev 指向旧尾节点）
+   - `tail = newNode`（更新 tail）
+
+**完整代码：**
+
+```cpp
+#include <iostream>
+using namespace std;
+
+struct DNode {
+    int data;
+    DNode* prev;
+    DNode* next;
+    DNode(int val) : data(val), prev(nullptr), next(nullptr) {}
+};
+
+// 尾插法创建双向链表
+DNode* createDoublyList(int arr[], int n) {
+    if (n == 0) return nullptr;
+
+    DNode* head = new DNode(arr[0]);
+    DNode* tail = head;
+
+    for (int i = 1; i < n; i++) {
+        DNode* newNode = new DNode(arr[i]);
+        tail->next = newNode;  // 旧尾节点 next 指向新节点
+        newNode->prev = tail;  // 新节点 prev 指向旧尾节点
+        tail = newNode;        // 更新 tail
+    }
+
+    return head;
+}
+
+// 显示双向链表
+void display(DNode* head) {
+    DNode* curr = head;
+    while (curr != nullptr) {
+        cout << curr->data << " <-> ";
+        curr = curr->next;
+    }
+    cout << "NULL" << endl;
+}
+
+int main() {
+    int arr[] = {10, 20, 30, 40, 50};
+    int n = 5;
+    DNode* head = createDoublyList(arr, n);
+    display(head);
+    return 0;
+}
+```
+
+```text
+输出：
+10 <-> 20 <-> 30 <-> 40 <-> 50 <-> NULL
+```
+
+**逐步图解（创建过程）：**
+
+第 1 步：创建第一个节点
+
+```text
+head, tail
+  |       |
+  v       v
++----+----+----+
+|NULL| 10 |NULL|
++----+----+----+
+```
+
+第 2 步：插入值为 20 的节点
+
+```text
+head       tail
+  |         |
+  v         v
++----+----+----+    +----+----+----+
+|NULL| 10 | next|-->|prev| 20 |NULL|
++----+----+----+    +----+----+----+
+         <--|
+```
+
+第 3 步：插入值为 30 的节点
+
+```text
+head             tail
+  |               |
+  v               v
++----+----+----+  +----+----+----+  +----+----+----+
+|NULL| 10 |next|->|prev| 20 |next|->|prev| 30 |NULL|
++----+----+----+  +----+----+----+  +----+----+----+
+         <-|             <-|
+```
+
+完成后的完整结构：
+
+```text
+NULL <--- +----+----+----+    +----+----+----+    +----+----+----+
+          |NULL| 10 |  -+--->| <--+ 20 |  -+--->| <--+ 30 |NULL|
+          +----+----+----+    +----+----+----+    +----+----+----+
+head                                       tail
+```
+
+**复杂度：** O(n)，遍历数组一次。
 
 ---
 
-### 8. 双向链表的基本操作
+### 20. 双向链表的基本操作
 
-#### 8.1 双向遍历
+#### 20.1 双向遍历
 
-双向链表可以从头到尾（正向）或从尾到头（反向）遍历。
+双向链表可以正向遍历（从 `head` 到 `tail`）和反向遍历（从 `tail` 到 `head`）。
 
-```
-// 正向遍历
-void printForward(DListNode* head) {
-    DListNode* curr = head;
-    std::cout << "正向: ";
+**正向遍历代码：**
+
+```cpp
+// 正向遍历：从 head 到 tail
+void traverseForward(DNode* head) {
+    cout << "正向遍历：";
+    DNode* curr = head;
     while (curr != nullptr) {
-        std::cout << curr->data << " ";
+        cout << curr->data << " -> ";
         curr = curr->next;
     }
-    std::cout << std::endl;
+    cout << "NULL" << endl;
 }
+```
 
-// 反向遍历（需要先找到尾节点）
-void printBackward(DListNode* head) {
-    if (head == nullptr) return;
+**反向遍历代码：**
 
-    // 先走到尾节点
-    DListNode* tail = head;
-    while (tail->next != nullptr) {
-        tail = tail->next;
-    }
-
-    // 从尾节点往前遍历
-    std::cout << "反向: ";
-    DListNode* curr = tail;
+```cpp
+// 反向遍历：从 tail 到 head
+void traverseBackward(DNode* tail) {
+    cout << "反向遍历：";
+    DNode* curr = tail;
     while (curr != nullptr) {
-        std::cout << curr->data << " ";
+        cout << curr->data << " -> ";
         curr = curr->prev;
     }
-    std::cout << std::endl;
+    cout << "NULL" << endl;
 }
-
-// 示例输出：
-// 正向: 10 20 30 40 50
-// 反向: 50 40 30 20 10
 ```
 
-#### 8.2 插入节点
+**如何获取 tail？** 如果只有 `head`，需要先走到尾部：
 
-双向链表的插入需要维护 **4 根指针**（比单链表多了 `prev` 的维护）。
-
-**在指定节点 `pos` 之后插入新节点：**
-
+```cpp
+DNode* getTail(DNode* head) {
+    if (head == nullptr) return nullptr;
+    DNode* curr = head;
+    while (curr->next != nullptr) {
+        curr = curr->next;
+    }
+    return curr;
+}
 ```
-// 在节点 pos 之后插入新节点
-void insertAfter(DListNode* pos, int val) {
-    if (pos == nullptr) return;
 
-    DListNode* newNode = new DListNode(val);
-    DListNode* nextNode = pos->next;  // 保存 pos 的后继
+**完整示例：**
 
-    // 建立 pos 和 newNode 之间的连接
-    pos->next = newNode;
+```cpp
+int main() {
+    int arr[] = {10, 20, 30, 40};
+    DNode* head = createDoublyList(arr, 4);
+
+    traverseForward(head);              // 10 -> 20 -> 30 -> 40 -> NULL
+    traverseBackward(getTail(head));    // 40 -> 30 -> 20 -> 10 -> NULL
+
+    return 0;
+}
+```
+
+```text
+输出：
+正向遍历：10 -> 20 -> 30 -> 40 -> NULL
+反向遍历：40 -> 30 -> 20 -> 10 -> NULL
+```
+
+**复杂度：** 正向和反向遍历都是 O(n)。
+
+#### 20.2 在指定节点之后插入
+
+**思路分析：**
+
+在节点 `pos` 之后插入新节点，需要修改 4 根指针：
+
+1. `newNode->next = pos->next`（新节点的 next 指向 pos 的下一个节点）
+2. `newNode->prev = pos`（新节点的 prev 指向 pos）
+3. 如果 `pos->next` 不是 `nullptr`，则 `pos->next->prev = newNode`（pos 的下一个节点的 prev 指向新节点）
+4. `pos->next = newNode`（pos 的 next 指向新节点）
+
+**完整代码：**
+
+```cpp
+// 在指定节点之后插入
+void insertAfter(DNode* pos, int val) {
+    if (pos == nullptr) {
+        cout << "指定节点为空" << endl;
+        return;
+    }
+
+    DNode* newNode = new DNode(val);
+
+    // 步骤 1：新节点 next 指向 pos 的下一个节点
+    newNode->next = pos->next;
+
+    // 步骤 2：新节点 prev 指向 pos
     newNode->prev = pos;
 
-    // 建立 newNode 和 nextNode 之间的连接
-    newNode->next = nextNode;
-    if (nextNode != nullptr) {
-        nextNode->prev = newNode;
+    // 步骤 3：如果 pos 不是尾节点，更新 pos 原下一个节点的 prev
+    if (pos->next != nullptr) {
+        pos->next->prev = newNode;
     }
+
+    // 步骤 4：pos 的 next 指向新节点
+    pos->next = newNode;
 }
 ```
 
-**图解（在节点 20 之后插入 25）：**
+**详细图解：**
 
-```
-原链表：  [10] ⟺ [20] ⟺ [30]
-                   ↑ pos
+初始状态，在节点 20 之后插入 25：
 
-步骤1：保存 nextNode = pos->next（即 30）
-步骤2：pos->next = newNode      →  [20] ──> [25]
-步骤3：newNode->prev = pos      →  [20] <── [25]
-步骤4：newNode->next = nextNode →  [25] ──> [30]
-步骤5：nextNode->prev = newNode →  [25] <── [30]
-
-结果：  [10] ⟺ [20] ⟺ [25] ⟺ [30]
+```text
+NULL <--- +----+----+----+    +----+----+----+    +----+----+----+
+          |NULL| 10 |  -+--->| <--+ 20 |  -+--->| <--+ 30 |NULL|
+          +----+----+----+    +----+----+----+    +----+----+----+
+                                ^
+                                |
+                               pos
 ```
 
-**在指定节点 `pos` 之前插入新节点：**
+创建新节点：
 
+```text
++----+----+----+
+|NULL| 25 |NULL|
++----+----+----+
 ```
-// 在节点 pos 之前插入新节点
-// 返回新的头指针（因为可能在头部之前插入）
-DListNode* insertBefore(DListNode* head, DListNode* pos, int val) {
-    if (pos == nullptr) return head;
 
-    DListNode* newNode = new DListNode(val);
-    DListNode* prevNode = pos->prev;
+步骤 1：`newNode->next = pos->next`（25 的 next 指向 30）
 
-    // 建立 newNode 和 pos 之间的连接
+```text
++----+----+----+           +----+----+----+
+|NULL| 25 |  -+----------->| <--+ 30 |NULL|
++----+----+----+           +----+----+----+
+```
+
+步骤 2：`newNode->prev = pos`（25 的 prev 指向 20）
+
+```text
++----+----+----+    +----+----+----+
+| <--+ 25 |  -+--->| <--+ 30 |NULL|
++----+----+----+    +----+----+----+
+```
+
+步骤 3：`pos->next->prev = newNode`（30 的 prev 指向 25）
+
+```text
++----+----+----+    +----+----+----+
+| <--+ 25 |  -+--->| <--+ 30 |NULL|
++----+----+----+    +----+----+----+
+      ^                    ^
+      |                    |
+      +--------------------+
+```
+
+步骤 4：`pos->next = newNode`（20 的 next 指向 25）
+
+```text
++----+----+----+    +----+----+----+    +----+----+----+
+| <--+ 20 |  -+--->| <--+ 25 |  -+--->| <--+ 30 |NULL|
++----+----+----+    +----+----+----+    +----+----+----+
+```
+
+最终状态：
+
+```text
+NULL <--- 10 <-> 20 <-> 25 <-> 30 ---> NULL
+```
+
+**复杂度：** O(1)，给定节点指针后，插入操作是常数时间。这是双向链表相比单链表的一个重要优势。
+
+#### 20.3 在指定节点之前插入
+
+**思路分析：**
+
+在节点 `pos` 之前插入新节点。如果 `pos->prev` 存在，可以利用它直接操作。
+
+**完整代码：**
+
+```cpp
+// 在指定节点之前插入
+// 返回可能更新的 head（如果在 head 之前插入，head 会变）
+DNode* insertBefore(DNode* head, DNode* pos, int val) {
+    if (pos == nullptr) {
+        cout << "指定节点为空" << endl;
+        return head;
+    }
+
+    DNode* newNode = new DNode(val);
+
+    // 步骤 1：新节点 next 指向 pos
     newNode->next = pos;
-    pos->prev = newNode;
 
-    // 建立 prevNode 和 newNode 之间的连接
-    newNode->prev = prevNode;
-    if (prevNode != nullptr) {
-        prevNode->next = newNode;
+    // 步骤 2：新节点 prev 指向 pos 的前一个节点
+    newNode->prev = pos->prev;
+
+    // 步骤 3：如果 pos 不是头节点，更新 pos 原前一个节点的 next
+    if (pos->prev != nullptr) {
+        pos->prev->next = newNode;
     } else {
-        // prevNode 为空意味着 pos 是头节点
-        // newNode 成为新的头节点
+        // pos 是头节点，新节点成为新 head
         head = newNode;
     }
+
+    // 步骤 4：pos 的 prev 指向新节点
+    pos->prev = newNode;
 
     return head;
 }
 ```
 
-#### 8.3 删除节点
+**复杂度：** O(1)，给定节点指针后是常数时间。
 
-```
-// 删除指定节点 pos
-// 返回新的头指针
-DListNode* deleteNode(DListNode* head, DListNode* pos) {
+#### 20.4 删除指定节点
+
+**双向链表删除的巨大优势：** 给定要删除的节点指针 `pos`，可以直接通过 `pos->prev` 找到前驱，不需要从头遍历。
+
+单链表删除给定节点需要 O(n)（找前驱），双向链表只需 O(1)。
+
+**完整代码：**
+
+```cpp
+// 删除指定节点
+// 返回可能更新的 head
+DNode* deleteNode(DNode* head, DNode* pos) {
     if (pos == nullptr) return head;
 
-    DListNode* prevNode = pos->prev;
-    DListNode* nextNode = pos->next;
-
-    // 处理与前驱的连接
-    if (prevNode != nullptr) {
-        prevNode->next = nextNode;
+    // 如果 pos 不是头节点，让前驱的 next 指向后继
+    if (pos->prev != nullptr) {
+        pos->prev->next = pos->next;
     } else {
-        // pos 是头节点，更新头指针
-        head = nextNode;
+        // pos 是头节点，更新 head
+        head = pos->next;
     }
 
-    // 处理与后继的连接
-    if (nextNode != nullptr) {
-        nextNode->prev = prevNode;
+    // 如果 pos 不是尾节点，让后继的 prev 指向前驱
+    if (pos->next != nullptr) {
+        pos->next->prev = pos->prev;
     }
 
     delete pos;
@@ -1145,421 +4996,494 @@ DListNode* deleteNode(DListNode* head, DListNode* pos) {
 }
 ```
 
-> **双向链表删除的优势**：单链表删除需要找到前驱节点（O(n)），而双向链表可以直接通过 `pos->prev` 获取前驱（O(1)），所以双向链表的删除操作在已知节点指针的情况下是 O(1) 的。
+**图解（删除节点 20）：**
 
-#### 8.4 双向链表 vs 单链表操作对比
+删除前：
 
-| 操作             | 单链表             | 双向链表                  |
-| ---------------- | ------------------ | ------------------------- |
-| 正向遍历         | ✅ O(n)             | ✅ O(n)                    |
-| 反向遍历         | ❌ 不支持           | ✅ O(n)                    |
-| 在给定节点后插入 | ✅ O(1)             | ✅ O(1)，但需要多维护 prev |
-| 在给定节点前插入 | ❌ O(n)，需要找前驱 | ✅ O(1)，有 prev 指针      |
-| 删除给定节点     | ❌ O(n)，需要找前驱 | ✅ O(1)，有 prev 指针      |
-| 每个节点额外空间 | 1 个指针           | 2 个指针                  |
+```text
+NULL <--- 10 <-> 20 <-> 30 ---> NULL
+                 ^
+                 |
+                pos
+```
+
+步骤 1：`pos->prev->next = pos->next`（10 的 next 指向 30）
+
+```text
+10.next = 30
+
+NULL <--- 10 ---------> 30 ---> NULL
+                 20 <-> 
+```
+
+步骤 2：`pos->next->prev = pos->prev`（30 的 prev 指向 10）
+
+```text
+30.prev = 10
+
+NULL <--- 10 <--------- 30 ---> NULL
+                 20
+```
+
+释放节点 20，最终：
+
+```text
+NULL <--- 10 <-> 30 ---> NULL
+```
+
+**复杂度：** O(1)，给定节点指针后是常数时间。
+
+#### 20.5 双向链表 vs 单链表对比表
+
+| 对比项 | 单链表 | 双向链表 |
+|--------|--------|----------|
+| 每个节点的指针数 | 1 个（`next`） | 2 个（`prev` + `next`） |
+| 每个节点的内存开销 | 较小 | 较大（多一个指针） |
+| 正向遍历 | 支持 | 支持 |
+| 反向遍历 | 不支持（需从头重新走） | 支持（直接用 `prev`） |
+| 删除给定节点 | O(n)（需找前驱） | O(1)（`prev` 直接指向前驱） |
+| 在给定节点前插入 | O(n)（需找前驱） | O(1)（`prev` 直接可用） |
+| 在给定节点后插入 | O(1) | O(1) |
+| 代码复杂度 | 较简单 | 较复杂（多维护 `prev`） |
+| 适用场景 | 只需单向遍历 | 需要双向遍历或频繁删除 |
 
 ---
 
-### 9. 双向循环链表
+### 21. 双向链表反转
 
-#### 9.1 循环链表的概念
+双向链表的反转思路：**交换每个节点的 `prev` 和 `next` 指针，最后把 `head` 更新为原来的尾节点。**
 
-普通链表的尾节点指向 `nullptr`，而**循环链表**的尾节点重新指回头节点，形成一个闭环。
+**思路分析：**
 
-```
-普通双向链表：
-nullptr <── [10] ⟺ [20] ⟺ [30] ──> nullptr
+1. 遍历每个节点
+2. 对每个节点，交换 `prev` 和 `next`
+3. 遍历结束后，`curr` 停在原尾节点的位置（因为原尾节点的 `next` 是 `nullptr`，交换后 `prev` 变成 `nullptr`，遍历沿原来的 `prev` 方向走）
+4. 返回原尾节点作为新 `head`
 
-双向循环链表：
-     ┌────────────────────────────────┐
-     ↓                                |
-    [10] ⟺ [20] ⟺ [30]              |
-     ↑                  |             |
-     └──────────────────┘             |
-                                      ↓
-   （尾节点的 next 指向头，头节点的 prev 指向尾）
-```
+**完整代码：**
 
-#### 9.2 带哨兵头节点的双向循环链表
-
-这就是 **`std::list` 的底层结构**！
-
-- 有一个**不存储有效数据**的哨兵节点
-- 哨兵的 `next` 指向第一个数据节点
-- 哨兵的 `prev` 指向最后一个数据节点
-- 最后一个数据节点的 `next` 指向哨兵
-- 第一个数据节点的 `prev` 指向哨兵
-- **空链表**时：哨兵的 `next` 和 `prev` 都指向自己
-
-```
-空链表：
-    ┌───────┐
-    ↓       |
-  [sentinel]─┘   （next 和 prev 都指向自己）
-    ↑       |
-    └───────┘
-
-含有 3 个元素的链表：
-    ┌──────────────────────────────────────────┐
-    ↓                                          |
-  [sentinel] ⟺ [10] ⟺ [20] ⟺ [30]           |
-    ↑                              |           |
-    └──────────────────────────────┘           |
-                                               ↓
-  sentinel->next = 10（第一个数据节点）
-  sentinel->prev = 30（最后一个数据节点）
-  30->next = sentinel
-  10->prev = sentinel
-```
-
-**实现代码：**
-
-```
-struct DListNode {
-    int data;
-    DListNode* prev;
-    DListNode* next;
-
-    DListNode(int val = 0) : data(val), prev(this), next(this) {}
-    // 默认构造：next 和 prev 都指向自己（用于哨兵节点初始化）
-};
-
-class CircularDoublyList {
-private:
-    DListNode* sentinel;  // 哨兵节点
-    int size_;
-
-public:
-    // 构造函数：创建空链表
-    CircularDoublyList() : size_(0) {
-        sentinel = new DListNode();
-        // sentinel->next = sentinel, sentinel->prev = sentinel
-        // 构造函数中已经默认设置好了
+```cpp
+// 双向链表反转
+DNode* reverse(DNode* head) {
+    if (head == nullptr || head->next == nullptr) {
+        return head;
     }
 
-    // 判断是否为空
-    bool empty() const {
-        return sentinel->next == sentinel;
+    DNode* curr = head;
+    DNode* temp = nullptr;
+
+    // 遍历每个节点，交换 prev 和 next
+    while (curr != nullptr) {
+        temp = curr->prev;
+        curr->prev = curr->next;
+        curr->next = temp;
+        curr = curr->prev;  // 交换后，curr->prev 是原来的 next
     }
 
-    // 获取元素个数
-    int size() const { return size_; }
+    // temp 现在是原尾节点的 prev（即原尾节点的前一个节点）
+    // 但循环结束后 curr 为 nullptr，temp 是最后一个非空节点的 prev
+    // 实际上 temp 指向原 head 的前一个（nullptr），而最后一个处理的节点是原尾节点
+    // 需要返回新 head，即最后一个非空节点
 
-    // 在 pos 节点之前插入新节点（核心操作）
-    void insertBefore(DListNode* pos, int val) {
-        DListNode* newNode = new DListNode(val);
-        DListNode* prevNode = pos->prev;
+    // 更准确地说，循环结束后 curr == nullptr，
+    // 而 temp 指向的是最后一个处理的节点的 prev（交换后）
+    // 最后一个处理的节点就是原尾节点，交换后它的 next（原 prev）变成了 temp 的指向
+    // 新 head = 最后一个非空的 curr 前一步 = temp->next（如果 temp 不是 nullptr）
 
-        // 建立 prevNode <-> newNode 的连接
-        prevNode->next = newNode;
-        newNode->prev = prevNode;
+    // 简化：直接返回 temp，因为 temp 是最后一个交换时 curr->prev 的旧值
+    // 其实 temp 此时 = 原尾节点交换前的 prev，即原尾节点的前一个节点的指针
+    // 但我们要的是原尾节点本身
 
-        // 建立 newNode <-> pos 的连接
-        newNode->next = pos;
-        pos->prev = newNode;
-
-        ++size_;
+    // 最简洁的做法：在循环中记住上一个处理的节点
+    DNode* last = head;
+    curr = head;
+    while (curr != nullptr) {
+        last = curr;
+        temp = curr->prev;
+        curr->prev = curr->next;
+        curr->next = temp;
+        curr = curr->prev;
     }
 
-    // 头部插入
-    void pushFront(int val) {
-        insertBefore(sentinel->next, val);
+    return last;  // last 是原尾节点，反转后是新 head
+}
+```
+
+上面的代码有点绕，给出一个更清晰的版本：
+
+```cpp
+// 双向链表反转（更清晰的版本）
+DNode* reverse(DNode* head) {
+    if (head == nullptr) return nullptr;
+
+    DNode* curr = head;
+    DNode* newHead = nullptr;
+
+    while (curr != nullptr) {
+        // 交换当前节点的 prev 和 next
+        DNode* temp = curr->prev;
+        curr->prev = curr->next;
+        curr->next = temp;
+
+        // 记录新 head（最后一个非空节点）
+        newHead = curr;
+
+        // 沿原来的 next 方向前进（交换后是 curr->prev）
+        curr = curr->prev;
     }
 
-    // 尾部插入
-    void pushBack(int val) {
-        insertBefore(sentinel, val);
-        // sentinel 的前面就是链表的尾部！
-        // 在 sentinel 之前插入 = 在最后一个数据节点之后插入
+    return newHead;
+}
+```
+
+**逐步图解：**
+
+初始状态：`10 <-> 20 <-> 30`
+
+```text
+NULL <- 10 <-> 20 <-> 30 -> NULL
+head
+```
+
+第 1 次循环，`curr = 10`：
+
+```text
+交换前：prev=NULL, next=20
+交换后：prev=20, next=NULL
+
+10: prev=20, next=NULL
+```
+
+```text
+curr -> 沿原 next 方向走，即 curr->prev（交换后）= 20
+
+NULL -> 10    20 <-> 30 -> NULL
+      ^  |
+      +--+
+         20 是 10 的 prev（交换后）
+
+此时 newHead = 10
+```
+
+第 2 次循环，`curr = 20`：
+
+```text
+交换前：prev=10, next=30
+交换后：prev=30, next=10
+```
+
+```text
+此时 newHead = 20
+curr -> 30
+```
+
+第 3 次循环，`curr = 30`：
+
+```text
+交换前：prev=20, next=NULL
+交换后：prev=NULL, next=20
+```
+
+```text
+此时 newHead = 30
+curr -> nullptr，循环结束
+```
+
+最终结果：
+
+```text
+NULL <- 30 <-> 20 <-> 10 -> NULL
+newHead (= 30)
+```
+
+链表成功反转：`30 <-> 20 <-> 10`。
+
+**复杂度：** O(n)，遍历每个节点一次。空间复杂度 O(1)，只用了常数额外空间。
+
+---
+
+### 22. 双向循环链表
+
+#### 22.1 概念与内存结构
+
+双向循环链表结合了双向链表和循环链表的特点：
+
+- 每个节点有 `prev` 和 `next` 两个指针
+- **尾节点的 `next` 指回头节点**（而不是 `nullptr`）
+- **头节点的 `prev` 指向尾节点**（而不是 `nullptr`）
+
+形成双向闭环。
+
+**结构图：**
+
+```text
+               +-----------------------------------+
+               |                                   |
+               v                                   |
+  +----+----+----+    +----+----+----+    +----+----+----+
+  | <--+ 10 |  -+--->| <--+ 20 |  -+--->| <--+ 30 |  -+---> (回到 10)
+  +----+----+----+    +----+----+----+    +----+----+----+
+  |    ^              |    ^              |    ^
+  |    |              |    |              |    |
+  +----+              +----+              +----+
+  |                                   |
+  +-----------------------------------+
+  (30 的 next 回到 10，10 的 prev 指向 30)
+```
+
+简化示意：
+
+```text
+        +-------> 10 <-------+
+        |         ^  |        |
+        |         |  v        |
+        |        30  20       |
+        |         ^  |        |
+        |         |  v        |
+        +---------+  +--------+
+```
+
+**空双向循环链表：** `head == nullptr`。
+
+**节点结构体：** 与双向链表相同，使用 `DNode`。
+
+#### 22.2 基本操作（插入、删除、遍历）
+
+**创建双向循环链表（尾插法）：**
+
+```cpp
+// 创建双向循环链表
+DNode* createDoublyCircularList(int arr[], int n) {
+    if (n == 0) return nullptr;
+
+    DNode* head = new DNode(arr[0]);
+    DNode* tail = head;
+
+    for (int i = 1; i < n; i++) {
+        DNode* newNode = new DNode(arr[i]);
+        tail->next = newNode;
+        newNode->prev = tail;
+        tail = newNode;
     }
 
-    // 删除指定节点
-    void erase(DListNode* pos) {
-        if (pos == sentinel) return;  // 不能删除哨兵节点！
+    // 形成双向循环
+    tail->next = head;  // 尾节点 next 指回头节点
+    head->prev = tail;  // 头节点 prev 指向尾节点
 
-        pos->prev->next = pos->next;
-        pos->next->prev = pos->prev;
+    return head;
+}
+```
+
+**图解（创建 10 <-> 20 <-> 30 双向循环链表）：**
+
+最后一步 `tail->next = head; head->prev = tail;`：
+
+```text
+之前（双向链表）：NULL <- 10 <-> 20 <-> 30 -> NULL
+
+之后（双向循环链表）：
+
+        +-------> 10 <-------+
+        |         ^  |        |
+        |         |  v        |
+        |        30  20       |
+        |         ^  |        |
+        |         |  v        |
+        +---------+  +--------+
+```
+
+**正向遍历（迭代）：**
+
+```cpp
+// 双向循环链表正向遍历
+void displayForward(DNode* head) {
+    if (head == nullptr) {
+        cout << "链表为空" << endl;
+        return;
+    }
+
+    DNode* curr = head;
+    do {
+        cout << curr->data << " <-> ";
+        curr = curr->next;
+    } while (curr != head);  // 回到 head 时停止
+
+    cout << "(回到 " << head->data << ")" << endl;
+}
+```
+
+**反向遍历（迭代）：**
+
+```cpp
+// 双向循环链表反向遍历
+void displayBackward(DNode* head) {
+    if (head == nullptr) {
+        cout << "链表为空" << endl;
+        return;
+    }
+
+    // 反向遍历从 tail 开始，即 head->prev
+    DNode* tail = head->prev;
+    DNode* curr = tail;
+
+    do {
+        cout << curr->data << " <-> ";
+        curr = curr->prev;
+    } while (curr != tail);  // 回到 tail 时停止
+
+    cout << "(回到 " << tail->data << ")" << endl;
+}
+```
+
+**在头部插入节点：**
+
+```cpp
+// 在双向循环链表头部插入
+DNode* insertAtHead_DC(DNode* head, int val) {
+    DNode* newNode = new DNode(val);
+
+    // 空链表
+    if (head == nullptr) {
+        newNode->next = newNode;
+        newNode->prev = newNode;
+        return newNode;
+    }
+
+    DNode* tail = head->prev;  // 通过 head->prev 直接得到尾节点，O(1)！
+
+    // 新节点链接到 head 和 tail 之间
+    newNode->next = head;
+    newNode->prev = tail;
+    head->prev = newNode;
+    tail->next = newNode;
+
+    return newNode;  // 新节点成为新 head
+}
+```
+
+**图解（在头部插入 5）：**
+
+插入前（双向循环链表：10 <-> 20 <-> 30）：
+
+```text
+        +-------> 10 <-------+
+        |         ^  |        |
+        |         |  v        |
+        |        30  20       |
+        |         ^  |        |
+        |         |  v        |
+        +---------+  +--------+
+```
+
+插入后（5 <-> 10 <-> 20 <-> 30）：
+
+```text
+        +-------> 5  <--------+
+        |         ^  |         |
+        |         |  v         |
+        |        30  10        |
+        |         ^  |         |
+        |         |  v         |
+        |        +    20       |
+        |         ^  |         |
+        |         |  v         |
+        +---------+  +---------+
+```
+
+注意：双向循环链表在头部插入只需 O(1)，因为通过 `head->prev` 直接就能找到尾节点，不需要遍历。
+
+**删除指定节点：**
+
+```cpp
+// 删除双向循环链表中的指定节点
+DNode* deleteNode_DC(DNode* head, DNode* pos) {
+    if (head == nullptr || pos == nullptr) return nullptr;
+
+    // 只有一个节点
+    if (pos->next == pos) {
         delete pos;
-        --size_;
+        return nullptr;
     }
 
-    // 头部删除
-    void popFront() {
-        if (!empty()) erase(sentinel->next);
-    }
+    // 更新前驱和后继的指针
+    pos->prev->next = pos->next;
+    pos->next->prev = pos->prev;
 
-    // 尾部删除
-    void popBack() {
-        if (!empty()) erase(sentinel->prev);
-    }
+    // 如果删除的是 head，需要更新 head
+    DNode* newHead = (pos == head) ? pos->next : head;
 
-    // 正向遍历
-    void printForward() const {
-        DListNode* curr = sentinel->next;
-        std::cout << "正向: ";
-        while (curr != sentinel) {  // 回到 sentinel 就结束
-            std::cout << curr->data << " ";
-            curr = curr->next;
-        }
-        std::cout << "(size=" << size_ << ")" << std::endl;
-    }
-
-    // 反向遍历
-    void printBackward() const {
-        DListNode* curr = sentinel->prev;
-        std::cout << "反向: ";
-        while (curr != sentinel) {
-            std::cout << curr->data << " ";
-            curr = curr->prev;
-        }
-        std::cout << "(size=" << size_ << ")" << std::endl;
-    }
-
-    // 获取头部数据
-    int front() const { return sentinel->next->data; }
-
-    // 获取尾部数据
-    int back() const { return sentinel->prev->data; }
-    // 注意：front()/back() 仅可在 !empty() 时调用
-
-    // 析构函数：释放所有节点
-    ~CircularDoublyList() {
-        DListNode* curr = sentinel->next;
-        while (curr != sentinel) {
-            DListNode* temp = curr->next;
-            delete curr;
-            curr = temp;
-        }
-        delete sentinel;
-    }
-};
-```
-
-**使用示例：**
-
-```
-int main() {
-    CircularDoublyList list;
-
-    list.pushBack(10);
-    list.pushBack(20);
-    list.pushBack(30);
-    list.pushFront(5);
-
-    list.printForward();   // 正向: 5 10 20 30 (size=4)
-    list.printBackward();  // 反向: 30 20 10 5 (size=4)
-
-    list.popFront();       // 删除 5
-    list.popBack();        // 删除 30
-
-    list.printForward();   // 正向: 10 20 (size=2)
-
-    std::cout << "front: " << list.front() << std::endl;  // 10
-    std::cout << "back: " << list.back() << std::endl;    // 20
-
-    return 0;
+    delete pos;
+    return newHead;
 }
 ```
 
-> **💡 精妙之处**：注意 `pushBack` 是通过 `insertBefore(sentinel, val)` 实现的！在环形结构中，sentinel 的前面就是最后一个节点，所以"在 sentinel 之前插入"等价于"在链表末尾追加"。这个设计极其优雅，也是 `std::list` 的核心思想之一。
+**图解（删除节点 20）：**
+
+删除前：
+
+```text
+        +-------> 10 <-------+
+        |         ^  |        |
+        |         |  v        |
+        |        30  20       |
+        |         ^  |        |
+        |         |  v        |
+        +---------+  +--------+
+```
+
+执行 `pos->prev->next = pos->next`（10 的 next 指向 30）和 `pos->next->prev = pos->prev`（30 的 prev 指向 10）：
+
+```text
+        +-------> 10 <-------+
+        |         ^  |        |
+        |         |  v        |
+        +---------+  +--------+
+                   30
+```
+
+释放节点 20，最终：
+
+```text
+        +-------> 10
+        |         ^  |
+        |         |  v
+        +---------+  30
+```
+
+即：`10 <-> 30` 双向循环。
+
+**复杂度汇总：**
+
+| 操作 | 时间复杂度 | 说明 |
+|------|-----------|------|
+| 创建 | O(n) | 遍历数组一次 |
+| 正向遍历 | O(n) | 每个节点访问一次 |
+| 反向遍历 | O(n) | 每个节点访问一次 |
+| 在头部插入 | O(1) | `head->prev` 直接得到尾节点 |
+| 在尾部插入 | O(1) | `head->prev` 直接得到尾节点 |
+| 删除指定节点 | O(1) | 给定节点指针，`prev` 和 `next` 直接可用 |
+| 查找某值 | O(n) | 最坏遍历一圈 |
+
+双向循环链表在头部/尾部操作上的 O(1) 特性，使其成为实现 **deque（双端队列）** 等数据结构的理想底层结构。
+
 
 ---
 
-## 第四阶段：封装与模板化
+## 第七阶段：模板化、迭代器与 STL std::list
+
+> 前面我们用函数操作裸指针、用类封装了链表。这一阶段我们将其**模板化**（支持任意类型）、加入**迭代器**（支持 range for），然后过渡到 STL `std::list`。
 
 ---
 
-### 10. 用类封装链表
+### 23. 模板化链表
 
-#### 10.1 完整的类封装
+#### 23.1 为什么需要模板化
 
-前面我们已经初步用类封装了循环双向链表。现在我们把它进一步完善，加入**拷贝构造**、**赋值运算符**和**析构函数**（所谓的"三大件" / Rule of Three）。
+前面的 `LinkedList` 类只能存储 `int`。如果想存 `double`、`string` 或自定义类型，难道要写多个版本？C++ 的**模板（Template）**就是为此而生——一次编写，支持任意类型。
 
-```
-#include <iostream>
-#include <initializer_list>
-#include <utility>
+#### 23.2 使用 `template<typename T>` 改造链表
 
-class LinkedList {
-private:
-    struct Node {
-        int data;
-        Node* prev;
-        Node* next;
-        Node(int val = 0) : data(val), prev(this), next(this) {}
-    };
-
-    Node* sentinel;
-    int size_;
-
-    // 私有辅助：在 pos 之前插入
-    void insertBefore(Node* pos, int val) {
-        Node* newNode = new Node(val);
-        Node* prevNode = pos->prev;
-
-        prevNode->next = newNode;
-        newNode->prev = prevNode;
-        newNode->next = pos;
-        pos->prev = newNode;
-
-        ++size_;
-    }
-
-    // 私有辅助：删除节点
-    void eraseNode(Node* pos) {
-        pos->prev->next = pos->next;
-        pos->next->prev = pos->prev;
-        delete pos;
-        --size_;
-    }
-
-    // 私有辅助：清空所有数据节点（保留 sentinel）
-    void clearNodes() {
-        Node* curr = sentinel->next;
-        while (curr != sentinel) {
-            Node* temp = curr->next;
-            delete curr;
-            curr = temp;
-        }
-        sentinel->next = sentinel;
-        sentinel->prev = sentinel;
-        size_ = 0;
-    }
-
-public:
-    // =================== 构造函数 ===================
-
-    // 默认构造：空链表
-    LinkedList() : size_(0) {
-        sentinel = new Node();
-    }
-
-    // 初始化列表构造
-    LinkedList(std::initializer_list<int> init) : LinkedList() {
-        for (int val : init) {
-            pushBack(val);
-        }
-    }
-
-    // =================== 拷贝构造函数 ===================
-    // 深拷贝：创建新的节点，不共享内存
-    LinkedList(const LinkedList& other) : LinkedList() {
-        Node* curr = other.sentinel->next;
-        while (curr != other.sentinel) {
-            pushBack(curr->data);
-            curr = curr->next;
-        }
-    }
-
-    // =================== 赋值运算符重载 ===================
-    // 使用 Copy-and-Swap 惯用法 —— 异常安全且简洁
-    LinkedList& operator=(LinkedList other) {
-        // 注意：参数是值传递，已经完成了拷贝
-        swap(other);
-        return *this;
-        // other（拷贝的旧数据）在这里被析构
-    }
-
-    // 交换函数
-    void swap(LinkedList& other) {
-        std::swap(sentinel, other.sentinel);
-        std::swap(size_, other.size_);
-    }
-
-    // =================== 析构函数 ===================
-    ~LinkedList() {
-        clearNodes();
-        delete sentinel;
-    }
-
-    // =================== 基本操作 ===================
-
-    void pushFront(int val) { insertBefore(sentinel->next, val); }
-    void pushBack(int val) { insertBefore(sentinel, val); }
-
-    void popFront() {
-        if (!empty()) eraseNode(sentinel->next);
-    }
-
-    void popBack() {
-        if (!empty()) eraseNode(sentinel->prev);
-    }
-
-    int front() const { return sentinel->next->data; }
-    int back() const { return sentinel->prev->data; }
-    // 注意：front()/back() 仅可在 !empty() 时调用
-    bool empty() const { return sentinel->next == sentinel; }
-    int size() const { return size_; }
-
-    void clear() { clearNodes(); }
-
-    // =================== 输出 ===================
-    void print() const {
-        Node* curr = sentinel->next;
-        std::cout << "[";
-        while (curr != sentinel) {
-            std::cout << curr->data;
-            if (curr->next != sentinel) std::cout << ", ";
-            curr = curr->next;
-        }
-        std::cout << "]" << std::endl;
-    }
-};
-```
-
-**使用示例：**
-
-```
-int main() {
-    // 初始化列表构造
-    LinkedList list1 = {1, 2, 3, 4, 5};
-    list1.print();  // [1, 2, 3, 4, 5]
-
-    // 拷贝构造
-    LinkedList list2(list1);
-    list2.pushBack(6);
-    list2.print();  // [1, 2, 3, 4, 5, 6]
-    list1.print();  // [1, 2, 3, 4, 5]  ← 深拷贝，互不影响
-
-    // 赋值
-    LinkedList list3;
-    list3 = list1;
-    list3.print();  // [1, 2, 3, 4, 5]
-
-    return 0;
-}
-```
-
-#### 10.2 Copy-and-Swap 惯用法详解
-
-```
-LinkedList& operator=(LinkedList other) {  // 值传递！
-    swap(other);
-    return *this;
-}
-```
-
-这个写法看起来简单，但极其精妙：
-
-1. **参数是值传递**（`LinkedList other` 而非 `const LinkedList& other`），在调用时就已经通过拷贝构造函数完成了深拷贝。
-2. 然后用 `swap` 将当前对象的内容和拷贝的新内容交换。
-3. 函数结束时，`other`（现在持有旧数据）的析构函数自动释放旧内存。
-
-**优点：**
-
-- **异常安全**：如果拷贝构造过程中抛出异常，原对象不受影响。
-- **自赋值安全**：`list = list` 也能正确工作。
-- **代码简洁**：不需要手动检查自赋值、手动释放旧内存。
-
----
-
-### 11. 模板化链表
-
-#### 11.1 使用 template<typename T> 支持泛型
-
-前面的 `LinkedList` 只能存 `int`，如果想存 `double`、`string` 或自定义类型，难道要写多个版本？当然不用——C++ 的**模板**就是为此而生。
-
-```
+```cpp
 template<typename T>
 class LinkedList {
 private:
@@ -1573,6 +5497,7 @@ private:
     Node* sentinel;
     int size_;
 
+    // 核心辅助函数保持不变，只是 T 代替了 int
     void insertBefore(Node* pos, const T& val) {
         Node* newNode = new Node(val);
         Node* prevNode = pos->prev;
@@ -1638,102 +5563,116 @@ public:
     T& back()  { return sentinel->prev->data; }
     const T& front() const { return sentinel->next->data; }
     const T& back()  const { return sentinel->prev->data; }
-    // 注意：front()/back() 仅可在 !empty() 时调用
 
     bool empty() const { return sentinel->next == sentinel; }
     int size() const { return size_; }
     void clear() { clearNodes(); }
+
+    void print() const {
+        Node* curr = sentinel->next;
+        std::cout << "[";
+        while (curr != sentinel) {
+            std::cout << curr->data;
+            if (curr->next != sentinel) std::cout << ", ";
+            curr = curr->next;
+        }
+        std::cout << "]" << std::endl;
+    }
 };
 ```
 
-> **⚠️ 限制说明**：这个简化模板把哨兵节点也建模为 `Node<T>`，并使用 `Node(const T& val = T())` 初始化哨兵，因此要求 `T` 可默认构造。工业级 `std::list` 会把“哨兵节点”和“数据节点”分离来避免这个限制。
+#### 23.3 使用示例
 
-#### 11.2 模板类的注意事项
+```cpp
+#include <iostream>
+#include <string>
+
+int main() {
+    // 存 int
+    LinkedList<int> intList = {1, 2, 3, 4, 5};
+    intList.print();  // [1, 2, 3, 4, 5]
+
+    // 存 double
+    LinkedList<double> doubleList = {1.1, 2.2, 3.3};
+    doubleList.print();  // [1.1, 2.2, 3.3]
+
+    // 存 string
+    LinkedList<std::string> strList = {"Hello", "World", "C++"};
+    strList.pushBack("Template");
+    strList.print();  // [Hello, World, C++, Template]
+
+    // 拷贝
+    LinkedList<int> copy(intList);
+    copy.pushBack(6);
+    copy.print();  // [1, 2, 3, 4, 5, 6]
+    intList.print();  // [1, 2, 3, 4, 5]  深拷贝互不影响
+
+    return 0;
+}
+```
+
+> **限制说明**：这个简化模板把哨兵节点建模为 `Node<T>`，使用 `Node(const T& val = T())` 初始化哨兵，因此要求 `T` 可默认构造。工业级 `std::list` 会把哨兵节点和数据节点分离来避免这个限制。
+
+#### 23.4 模板类的文件组织
 
 **关键规则：模板类的声明和实现通常都放在头文件中（`.h` / `.hpp`）。**
 
-原因是模板在**编译期实例化**。编译器看到 `LinkedList<int>` 时，需要能看到完整的实现代码才能生成对应的代码。如果实现放在 `.cpp` 里，其他翻译单元看不到实现，就会报链接错误。
+原因是模板在**编译期实例化**。编译器看到 `LinkedList<int>` 时，需要能看到完整的实现代码。如果实现放在 `.cpp` 里，其他翻译单元看不到实现，会报链接错误。
 
-```
-// ✅ 正确做法：全部放在头文件中
+```cpp
+// 正确做法：全部放在头文件中
 // LinkedList.hpp
 template<typename T>
 class LinkedList {
     // 声明 + 实现全部在这里
 };
 
-// ❌ 错误做法：声明和实现分离
-// LinkedList.h   → 只有声明
-// LinkedList.cpp → 实现（其他 .cpp 文件 include 头文件后找不到实现）
-```
-
-**使用示例：**
-
-```
-#include "LinkedList.hpp"
-#include <string>
-
-int main() {
-    // 存 int
-    LinkedList<int> intList = {1, 2, 3, 4, 5};
-
-    // 存 double
-    LinkedList<double> doubleList = {1.1, 2.2, 3.3};
-
-    // 存 string
-    LinkedList<std::string> strList = {"Hello", "World", "C++"};
-    strList.pushBack("Template");
-
-    return 0;
-}
+// 错误做法：声明和实现分离
+// LinkedList.h   -> 只有声明
+// LinkedList.cpp -> 实现（其他 .cpp 文件 include 后找不到实现）
 ```
 
 ---
 
-## 第五阶段：迭代器模式
+### 24. 自定义迭代器
 
----
+#### 24.1 什么是迭代器？为什么需要它？
 
-### 12. 自定义迭代器
+**迭代器（Iterator）**是一种设计模式，提供**统一的方式**遍历容器中的元素，而不需要暴露容器的内部实现。
 
-#### 12.1 什么是迭代器？为什么需要迭代器？
+**没有迭代器时：**
 
-**迭代器（Iterator）** 是一种**设计模式**，它提供了一种**统一的方式**来遍历容器中的元素，而不需要暴露容器的内部实现细节。
-
-**没有迭代器的问题：**
-
-```
-// 遍历数组 —— 用下标
+```cpp
+// 遍历数组 -- 用下标
 for (int i = 0; i < arr.size(); ++i)
     std::cout << arr[i];
 
-// 遍历链表 —— 用指针
+// 遍历链表 -- 用指针
 for (Node* p = head; p != nullptr; p = p->next)
     std::cout << p->data;
 
 // 每种容器的遍历方式都不一样！
-// 如果写一个通用算法（如排序、查找），就需要为每种容器写一个版本
 ```
 
 **有了迭代器：**
 
-```
-// 不管是数组、链表、树还是哈希表，都用同一种方式遍历：
+```cpp
+// 不管是数组、链表、树还是哈希表，统一写法：
 for (auto it = container.begin(); it != container.end(); ++it)
     std::cout << *it;
 
-// 甚至可以用范围 for（底层就是迭代器）
+// 甚至可以用范围 for（编译器自动翻译为迭代器版本）
 for (auto& item : container)
     std::cout << item;
 ```
 
-**迭代器的本质**：它像一个"智能指针"，包装了对容器内部节点的访问。通过重载 `*`、`->`、`++`、`--`、`==`、`!=` 等运算符，让它用起来和指针一样自然。
+**迭代器的本质**：像一个"智能指针"，通过重载 `*`、`->`、`++`、`--`、`==`、`!=` 运算符，让遍历用起来和指针一样自然。
 
-#### 12.2 为链表实现迭代器类
+#### 24.2 为链表实现迭代器
 
-我们在前面的模板化 `LinkedList` 类中加入迭代器的支持：
+在模板化 `LinkedList` 类中加入 `iterator` 和 `const_iterator`：
 
-```
+```cpp
 template<typename T>
 class LinkedList {
 private:
@@ -1747,25 +5686,19 @@ private:
     Node* sentinel;
     int size_;
 
-    // ... 省略之前的私有方法 ...
+    // ... 前面的私有辅助函数 ...
 
 public:
     // =================== 迭代器类 ===================
     class iterator {
     private:
-        Node* ptr;  // 指向当前节点
-
-        // 让 LinkedList 可以访问 iterator 的私有成员
-        friend class LinkedList;
+        Node* ptr;
+        friend class LinkedList;  // 让 LinkedList 可以访问私有成员
 
     public:
-        // 构造函数
         iterator(Node* p = nullptr) : ptr(p) {}
 
-        // 解引用运算符：获取当前节点的数据
         T& operator*() { return ptr->data; }
-
-        // 箭头运算符：当 T 是结构体/类时，访问其成员
         T* operator->() { return &(ptr->data); }
 
         // 前置 ++：移动到下一个节点
@@ -1774,14 +5707,14 @@ public:
             return *this;
         }
 
-        // 后置 ++
+        // 后置 ++：返回移动前的副本
         iterator operator++(int) {
             iterator tmp = *this;
             ptr = ptr->next;
             return tmp;
         }
 
-        // 前置 --：移动到上一个节点
+        // 前置 --
         iterator& operator--() {
             ptr = ptr->prev;
             return *this;
@@ -1794,14 +5727,8 @@ public:
             return tmp;
         }
 
-        // 比较运算符
-        bool operator==(const iterator& other) const {
-            return ptr == other.ptr;
-        }
-
-        bool operator!=(const iterator& other) const {
-            return ptr != other.ptr;
-        }
+        bool operator==(const iterator& other) const { return ptr == other.ptr; }
+        bool operator!=(const iterator& other) const { return ptr != other.ptr; }
     };
 
     // =================== const 迭代器类 ===================
@@ -1812,9 +5739,7 @@ public:
 
     public:
         const_iterator(const Node* p = nullptr) : ptr(p) {}
-
-        // 从普通迭代器隐式转换
-        const_iterator(const iterator& it) : ptr(it.ptr) {}
+        const_iterator(const iterator& it) : ptr(it.ptr) {}  // 从普通迭代器隐式转换
 
         const T& operator*() const { return ptr->data; }
         const T* operator->() const { return &(ptr->data); }
@@ -1837,9 +5762,8 @@ public:
     };
 
     // =================== begin() / end() ===================
-
     iterator begin() { return iterator(sentinel->next); }
-    iterator end()   { return iterator(sentinel); }  // end 指向哨兵节点
+    iterator end()   { return iterator(sentinel); }
 
     const_iterator begin() const { return const_iterator(sentinel->next); }
     const_iterator end()   const { return const_iterator(sentinel); }
@@ -1847,7 +5771,7 @@ public:
     const_iterator cbegin() const { return const_iterator(sentinel->next); }
     const_iterator cend()   const { return const_iterator(sentinel); }
 
-    // =================== 用迭代器实现 insert / erase ===================
+    // =================== 迭代器版 insert / erase ===================
 
     // 在 pos 之前插入，返回指向新元素的迭代器
     iterator insert(iterator pos, const T& val) {
@@ -1867,40 +5791,37 @@ public:
     // 删除 pos 指向的节点，返回指向下一个元素的迭代器
     iterator erase(iterator pos) {
         Node* posNode = pos.ptr;
-        if (posNode == sentinel) return end();  // 约定：不删除 end()
+        if (posNode == sentinel) return end();  // 不能删除 end()
         Node* nextNode = posNode->next;
 
         posNode->prev->next = nextNode;
         nextNode->prev = posNode->prev;
-
         delete posNode;
         --size_;
         return iterator(nextNode);
     }
-
-    // ... 保留之前的构造函数、析构函数等 ...
 };
 ```
 
-#### 12.3 begin() 和 end() 的设计哲学
+#### 24.3 `begin()` 和 `end()` 的设计哲学
 
-```
-链表：   [sentinel] ⟺ [10] ⟺ [20] ⟺ [30] ⟺ [sentinel]
-                        ↑                        ↑
-                     begin()                   end()
+```text
+链表：   [sentinel] <=> [10] <=> [20] <=> [30] <=> [sentinel]
+                           ^                         ^
+                        begin()                    end()
 
-有效范围：[begin, end)  —— 左闭右开区间！
+有效范围：[begin, end)  -- 左闭右开区间
 ```
 
 - `begin()` 返回指向**第一个数据节点**的迭代器
-- `end()` 返回指向**哨兵节点**的迭代器（即"越过最后一个元素的位置"）
-- 遍历条件：`it != end()`，当迭代器到达哨兵节点时，说明遍历完毕
+- `end()` 返回指向**哨兵节点**的迭代器（"越过最后一个元素的位置"）
+- 遍历条件：`it != end()`，到达哨兵节点时说明遍历完毕
 
 这种**左闭右开**的设计是 STL 的核心约定，所有容器都遵循。
 
-**使用示例：**
+#### 24.4 使用示例
 
-```
+```cpp
 int main() {
     LinkedList<int> list = {10, 20, 30, 40, 50};
 
@@ -1912,7 +5833,7 @@ int main() {
 
     // 范围 for（编译器自动翻译为迭代器版本）
     for (int& val : list) {
-        val *= 2;  // 修改每个元素
+        val *= 2;
     }
     for (int val : list) {
         std::cout << val << " ";
@@ -1921,15 +5842,14 @@ int main() {
 
     // 用迭代器插入
     auto it = list.begin();
-    ++it;  // 指向第 2 个元素（40）
+    ++it;              // 指向第 2 个元素（40）
     list.insert(it, 35);  // 在 40 前面插入 35
-    // 链表变为：20 35 40 60 80 100
 
     // 用迭代器删除
     it = list.begin();
-    ++it;  // 指向 35
+    ++it;              // 指向 35
     it = list.erase(it);  // 删除 35，it 现在指向 40
-    // 链表变为：20 40 60 80 100
+    // erase 返回下一个有效迭代器，一定要接住！
 
     // 存储结构体
     struct Student {
@@ -1950,29 +5870,24 @@ int main() {
 }
 ```
 
-> **📌 重要**：`erase` 之后，原来的迭代器就**失效**了（因为它指向的节点已被删除）。所以 `erase` 返回下一个有效迭代器，使用时一定要接住返回值：`it = list.erase(it)`。
+> **注意**：`erase` 之后原迭代器**失效**（节点已被删除）。必须用 `it = list.erase(it)` 接住返回值。
 
 ---
 
-## 第六阶段：过渡到 STL std::list
+### 25. 过渡到 STL `std::list`
 
----
+现在你已经亲手实现了链表和迭代器。接下来过渡到 `std::list` 会非常顺畅——因为你写的就是 `std::list` 的简化版！
 
-### 13. STL list 的使用
-
-现在你已经亲手实现了链表、迭代器，理解了底层原理。接下来过渡到 `std::list` 会非常顺畅——因为**你写的就是 `std::list` 的简化版！**
-
-```
+```cpp
 #include <list>
 #include <iostream>
 #include <algorithm>
-#include <iterator>   // std::advance
-#include <functional> // std::greater
+#include <functional>
 ```
 
-#### 13.1 构造函数
+#### 25.1 构造函数
 
-```
+```cpp
 // 1. 默认构造：空链表
 std::list<int> l1;
 
@@ -1983,171 +5898,146 @@ std::list<int> l2(5, 100);         // {100, 100, 100, 100, 100}
 std::list<int> l3 = {1, 2, 3, 4, 5};
 
 // 4. 拷贝构造
-std::list<int> l4(l3);             // l4 是 l3 的深拷贝
+std::list<int> l4(l3);
 
 // 5. 迭代器范围构造
 std::list<int> l5(l3.begin(), l3.end());
 
 // 6. 移动构造（C++11）
-std::list<int> l6(std::move(l5));  // l5 变为空，l6 获得数据
+std::list<int> l6(std::move(l5));  // l5 变空，l6 获得数据
 ```
 
-#### 13.2 赋值操作
+#### 25.2 赋值与大小
 
-```
+```cpp
 std::list<int> l1 = {1, 2, 3};
 std::list<int> l2;
-
-// operator=
 l2 = l1;
 
-// assign
 l2.assign(5, 10);                   // {10, 10, 10, 10, 10}
 l2.assign({7, 8, 9});              // {7, 8, 9}
-l2.assign(l1.begin(), l1.end());   // {1, 2, 3}
-```
 
-#### 13.3 大小操作
-
-```
-std::list<int> l = {1, 2, 3};
-l.size();     // 3
-l.empty();    // false
-l.resize(5);       // {1, 2, 3, 0, 0}  不足补 0
-l.resize(5, 99);   // 不足补 99
-l.resize(2);       // {1, 2}  多余截断
+l1.size();     // 3
+l1.empty();    // false
+l1.resize(5);       // {1, 2, 3, 0, 0}  不足补 0
+l1.resize(5, 99);   // 不足补 99
+l1.resize(2);       // {1, 2}  多余截断
 // 注意：std::list 没有 capacity()，因为链表不需要预分配
 ```
 
-#### 13.4 插入与删除
+#### 25.3 插入与删除
 
-```
+```cpp
 std::list<int> l = {10, 20, 30};
 
-// ===== 头尾操作 =====
+// 头尾操作
 l.push_back(40);       // {10, 20, 30, 40}
 l.push_front(5);       // {5, 10, 20, 30, 40}
 l.pop_back();          // {5, 10, 20, 30}
 l.pop_front();         // {10, 20, 30}
 
-l.emplace_back(40);    // 原地构造，比 push_back 更高效（对复杂对象而言）
-l.emplace_front(5);    // 同理
+l.emplace_back(40);    // 原地构造，复杂对象比 push_back 更高效
+l.emplace_front(5);
 
-// ===== 迭代器插入 =====
+// 迭代器插入
 auto it = l.begin();
 std::advance(it, 2);   // 移动迭代器到第 3 个位置
 l.insert(it, 25);      // 在 it 之前插入 25
 l.insert(it, 3, 99);   // 在 it 之前插入 3 个 99
-l.insert(it, {61, 62});// 在 it 之前插入 {61, 62}
+l.insert(it, {61, 62});// 在 it 之前插入列表
 
-l.emplace(it, 50);     // 原地构造并插入
-
-// ===== 删除 =====
+// 删除
 it = l.begin();
 it = l.erase(it);      // 删除 it 指向的元素，返回下一个迭代器
-l.erase(l.begin(), l.end());  // 删除范围内所有元素（等效于 clear）
+l.erase(l.begin(), l.end());  // 范围删除
 
 l.remove(10);          // 删除所有值为 10 的元素
-l.remove_if([](int x) { return x > 50; });  // 删除所有大于 50 的元素
+l.remove_if([](int x) { return x > 50; });  // 条件删除
 
 l.clear();             // 清空
 ```
 
-#### 13.5 数据访问
+#### 25.4 数据访问与遍历
 
-```
+```cpp
 std::list<int> l = {10, 20, 30};
-l.front();  // 10（首元素引用）
-l.back();   // 30（尾元素引用）
+l.front();  // 10
+l.back();   // 30
 
-// ⚠️ list 不支持 [] 和 at()，因为链表不支持随机访问！
+// 注意：list 不支持 [] 和 at()，因为不支持随机访问！
 // l[0];    // 编译错误！
 // l.at(0); // 编译错误！
-```
 
-#### 13.6 遍历
-
-```
-std::list<int> l = {1, 2, 3, 4, 5};
-
-// 1. 迭代器遍历
-for (auto it = l.begin(); it != l.end(); ++it) {
+// 迭代器遍历
+for (auto it = l.begin(); it != l.end(); ++it)
     std::cout << *it << " ";
-}
 
-// 2. 范围 for
-for (int val : l) {
+// 范围 for
+for (int val : l)
     std::cout << val << " ";
-}
 
-// 3. 反向遍历
-for (auto rit = l.rbegin(); rit != l.rend(); ++rit) {
-    std::cout << *rit << " ";
-}
-// 输出：5 4 3 2 1
+// 反向遍历
+for (auto rit = l.rbegin(); rit != l.rend(); ++rit)
+    std::cout << *rit << " ";  // 输出：30 20 10
 ```
 
-#### 13.7 list 特有的算法操作
+#### 25.5 `std::list` 特有的算法操作
 
-`std::list` 提供了一些**成员函数版本**的算法，比通用 `<algorithm>` 版本更高效（因为只需修改指针，不需要移动元素）。
+`std::list` 提供成员函数版本的算法，比通用 `<algorithm>` 版本更高效（只修改指针，不搬移元素）。
 
-```
+```cpp
 // ===== sort() =====
-// list 不能用 std::sort()（因为不支持随机访问迭代器）
-// 必须用成员函数 sort()
+// list 不能用 std::sort()（不支持随机访问迭代器），必须用成员函数
 std::list<int> l = {5, 3, 1, 4, 2};
 l.sort();                         // 升序：{1, 2, 3, 4, 5}
 l.sort(std::greater<int>());      // 降序：{5, 4, 3, 2, 1}
 
 // ===== reverse() =====
-l.reverse();  // 反转链表
+l.reverse();
 
 // ===== unique() =====
-// 删除连续的重复元素（通常先 sort 再 unique）
+// 删除连续重复元素（通常先 sort 再 unique）
 std::list<int> l2 = {1, 1, 2, 2, 3, 3, 3};
 l2.unique();  // {1, 2, 3}
 
 // ===== merge() =====
-// 将另一个有序链表合并进来（两个链表都必须有序）
+// 合并另一个有序链表（两个都必须有序）
 std::list<int> a = {1, 3, 5};
 std::list<int> b = {2, 4, 6};
-a.merge(b);   // a = {1, 2, 3, 4, 5, 6}，b 变成空链表
-// 底层只是修改指针，O(n)，不需要复制元素
+a.merge(b);   // a = {1, 2, 3, 4, 5, 6}，b 变空
+// 底层只修改指针，O(n)，不复制元素
 
 // ===== splice() =====
-// 将另一个链表的元素"移接"到当前链表（O(1)！只修改指针）
+// 将另一个链表的元素"移接"到当前链表（O(1)！只改指针）
 std::list<int> x = {1, 2, 3};
 std::list<int> y = {10, 20, 30};
 
 auto pos = x.begin();
 ++pos;  // 指向 2
 
-// 把 y 的所有元素移接到 x 中 pos 之前
-x.splice(pos, y);
+x.splice(pos, y);  // y 的所有元素移到 x 中 pos 之前
 // x = {1, 10, 20, 30, 2, 3}
-// y = {}（变空了，元素被移走了，不是复制！）
+// y = {}（元素被移走了，不是复制！）
 
 // splice 也可以只移动单个元素或一段范围
 std::list<int> m = {100, 200, 300};
 x.splice(x.begin(), m, m.begin());
 // 只把 m 的第一个元素 100 移接到 x 头部
-// x = {100, 1, 10, 20, 30, 2, 3}
-// m = {200, 300}
 ```
 
-> **📌 `splice` 是 `list` 最强大的操作之一**：整表移接和单节点移接通常是 O(1)（只改指针，不搬元素）；区间移接通常是 O(k)（k 为移接区间长度）。
+> **`splice` 是 `list` 最强大的操作之一**：整表移接和单节点移接通常是 O(1)（只改指针），区间移接是 O(k)（k 为区间长度）。
 
 ---
 
-### 14. STL list 源码简析（选学）
+### 26. STL `std::list` 源码简析（选学）
 
-> 这一节帮助你理解 `std::list` 的底层实现，和你手写的版本做对照。
+> 帮助理解 `std::list` 的底层实现，和你手写的版本做对照。
 
-#### 14.1 节点结构
+#### 26.1 节点结构
 
-在 GCC 的 libstdc++ 实现中，`list` 的节点大致如下：
+GCC 的 libstdc++ 实现中，`list` 的节点分两层：
 
-```
+```cpp
 // 基类：只存储前后指针（不含数据）
 struct _List_node_base {
     _List_node_base* _M_next;
@@ -2157,96 +6047,74 @@ struct _List_node_base {
 // 派生类：添加数据域
 template<typename _Tp>
 struct _List_node : public _List_node_base {
-    _Tp _M_data;  // 实际存储的数据
+    _Tp _M_data;
 };
 ```
 
-**为什么要分两层？**
+**为什么分两层？** 哨兵节点不需要存储数据！哨兵只需 `prev` 和 `next`，类型是 `_List_node_base`（没有数据域），而数据节点类型是 `_List_node<T>`（有数据域）。这样哨兵不浪费一个 `T` 的空间。
 
-哨兵节点不需要存储数据！哨兵节点只需要 `prev` 和 `next` 指针。所以 `std::list` 内部的哨兵节点类型是 `_List_node_base`（没有数据域），而数据节点类型是 `_List_node<T>`（有数据域）。这样哨兵节点不会浪费一个 `T` 的空间。
-
-```
+```text
 你手写的版本：  Node sentinel（data 字段浪费了空间）
-std::list：    _List_node_base sentinel（没有 data 字段，更节省）
+std::list：    _List_node_base sentinel（没有 data 字段，更省空间）
                _List_node<T> 数据节点（有 data 字段）
 ```
 
-#### 14.2 迭代器实现
+#### 26.2 迭代器实现
 
-```
+```cpp
 template<typename _Tp>
 struct _List_iterator {
-    typedef _Tp  value_type;
-    typedef _Tp& reference;
-    typedef _Tp* pointer;
+    _List_node_base* _M_node;  // 内部存储基类指针
 
-    _List_node_base* _M_node;  // 内部存储的是基类指针
-
-    reference operator*() const {
-        // 向下转型为 _List_node<_Tp>*，然后访问 _M_data
+    _Tp& operator*() const {
+        // 向下转型为 _List_node<_Tp>*，访问 _M_data
         return static_cast<_List_node<_Tp>*>(_M_node)->_M_data;
-    }
-
-    pointer operator->() const {
-        return &(operator*());
     }
 
     _List_iterator& operator++() {
         _M_node = _M_node->_M_next;
         return *this;
     }
-
-    _List_iterator& operator--() {
-        _M_node = _M_node->_M_prev;
-        return *this;
-    }
-
-    bool operator==(const _List_iterator& other) const {
-        return _M_node == other._M_node;
-    }
-    // ...
+    // ... 其他运算符类似 ...
 };
 ```
 
-> 你会发现，这和你手写的迭代器几乎一模一样！唯一的区别是 STL 版本使用了基类指针 + `static_cast` 的技巧。
+> 和你手写的迭代器几乎一模一样！区别只是用了基类指针 + `static_cast`。
 
-#### 14.3 内存分配器（Allocator）
+#### 26.3 内存分配器（Allocator）
 
-```
+```cpp
 template<typename _Tp, typename _Alloc = std::allocator<_Tp>>
-class list {
-    // ...
-};
+class list { /* ... */ };
 ```
 
-`std::list` 的第二个模板参数是**分配器（Allocator）**，默认是 `std::allocator<T>`。
-
-- 分配器负责**内存的申请和释放**，替代了直接使用 `new` / `delete`。
-- 默认的 `std::allocator` 底层调用的还是 `operator new` / `operator delete`。
-- 分配器的好处是**可替换**：你可以传入自定义的分配器，比如内存池分配器，以优化大量小对象分配的性能（链表节点恰好就是大量小对象）。
-- 这个参数对初学者来说可以忽略，使用默认即可。
+第二个模板参数是**分配器**，默认 `std::allocator<T>`：
+- 负责内存的申请和释放，替代直接 `new` / `delete`
+- 底层调用的还是 `operator new` / `operator delete`
+- 可替换为自定义分配器（如内存池分配器），优化大量小对象分配的性能（链表节点恰好就是大量小对象）
+- 初学者使用默认即可
 
 ---
 
-## 总结：从手写链表到 std::list 的对照
+### 总结：从手写链表到 `std::list` 的对照
 
 | 你手写的                                        | std::list 对应的                        |
 | ----------------------------------------------- | --------------------------------------- |
 | struct Node { T data; Node* prev; Node* next; } | _List_node_base + _List_node<T>         |
 | Node* sentinel                                  | _List_node_base _M_node（对象内嵌成员） |
 | class iterator { Node* ptr; }                   | _List_iterator<T>                       |
-| begin() → iterator(sentinel->next)              | 完全一致                                |
-| end() → iterator(sentinel)                      | 完全一致                                |
-| insertBefore(pos, val)                          | list::insert(pos, val)                  |
-| eraseNode(pos)                                  | list::erase(pos)                        |
-| pushBack(val) → insertBefore(sentinel)          | list::push_back(val)                    |
-| new Node(val)                                   | 使用 Allocator::allocate() + 构造       |
+| begin() -> iterator(sentinel->next)              | 完全一致                                |
+| end() -> iterator(sentinel)                      | 完全一致                                |
+| insertBefore(pos, val)                           | list::insert(pos, val)                  |
+| eraseNode(pos)                                   | list::erase(pos)                        |
+| pushBack(val) -> insertBefore(sentinel)          | list::push_back(val)                    |
+| new Node(val)                                    | Allocator::allocate() + 构造            |
 
-> **🎯 关键认知**：`std::list` 本质上就是你在第三~第五阶段手写的那个**带哨兵头节点的双向循环链表 + 迭代器类**。STL 只是在此基础上加入了分配器、更完善的类型特征（type traits）、异常安全等工业级特性。
+> **关键认知**：`std::list` 本质上就是**带哨兵头节点的双向循环链表 + 迭代器类**。STL 在此基础上加入了分配器、类型特征（type traits）、异常安全等工业级特性。
 
 ---
 
-## 附录：链表常见面试题速查
+### 附录：链表常见面试题速查
 
 | 题目              | 核心技巧                     | 复杂度     |
 | ----------------- | ---------------------------- | ---------- |
@@ -2259,7 +6127,3 @@ class list {
 | 判断回文链表      | 找中点 + 反转后半段 + 比较   | O(n)       |
 | 相交链表找交点    | 双指针各走一遍对方路径       | O(n+m)     |
 | 删除重复节点      | 有序则顺序去重；无序用哈希表 | O(n)       |
-
----
-
-以上就是全部内容！从基础的节点定义到手写带迭代器的模板链表，再到 `std::list` 的源码解析，这条路线走下来，你对链表和 `std::list` 的理解应该相当扎实了。接下来学习 `std::list` 的具体 API 时，你不会只是"背接口"，而是真正理解每一个操作在底层做了什么。🚀
