@@ -38,15 +38,14 @@
 
 ### 📝 题目描述
 
-**输入**：多组测试数据。每组第一行一个整数 `n`（`n > 0` 时继续），第二行 `n` 个整数。  
+**输入**：多组测试数据。每组一行，第一个整数为 `n`（`n > 0` 时继续），后面接 `n` 个整数。<br>
 **处理**：找出这 `n` 个数中**最小的数**，将它与**第一个数**交换。  
 **输出**：输出交换后的序列，数与数之间用空格分隔。  
 **结束条件**：当 `n = 0` 时结束。
 
 **样例输入**：
 ```
-5
-8 3 5 1 7
+5 8 3 5 1 7
 0
 ```
 **样例输出**：
@@ -73,10 +72,13 @@
 import sys
 
 for line in sys.stdin:                       # 逐行读取输入
-    n = int(line.strip())                    # 读取 n
+    data = list(map(int, line.split()))
+    if not data:
+        continue
+    n = data[0]                              # 读取 n
     if n == 0:                               # n 为 0 时结束
         break
-    nums = list(map(int, input().split()))   # 读取 n 个整数到列表
+    nums = data[1:1 + n]                     # 读取 n 个整数到列表
 
     # ---- 手动找最小值下标 ----
     min_idx = 0                              # 假设第 0 个是最小的
@@ -97,10 +99,13 @@ for line in sys.stdin:                       # 逐行读取输入
 import sys
 
 for line in sys.stdin:
-    n = int(line.strip())
+    data = list(map(int, line.split()))
+    if not data:
+        continue
+    n = data[0]
     if n == 0:
         break
-    nums = list(map(int, input().split()))
+    nums = data[1:1 + n]
 
     min_idx = nums.index(min(nums))          # 一行搞定：先求最小值，再找下标
     nums[0], nums[min_idx] = nums[min_idx], nums[0]  # Python 可以直接元组交换
@@ -159,7 +164,7 @@ ABCD00efg
 
 ---
 
-### ✅ 解法一：循环遍历 + `str.isdigit()`
+### ✅ 解法一：循环遍历 + ASCII 范围判断
 
 ```python
 n = int(input())                             # 读取测试组数
@@ -167,7 +172,7 @@ for _ in range(n):                           # 循环 n 次
     s = input()                              # 读取一行字符串
     count = 0                                # 计数器初始化
     for ch in s:                             # 遍历每个字符
-        if ch.isdigit():                     # 判断是否为数字字符
+        if '0' <= ch <= '9':                 # 判断是否为 ASCII 数字字符
             count += 1                       # 是则计数 +1
     print(count)                             # 输出本行的数字个数
 ```
@@ -179,7 +184,7 @@ n = int(input())
 for _ in range(n):
     s = input()
     # sum() 对布尔值求和：True 记为 1，False 记为 0
-    print(sum(ch.isdigit() for ch in s))
+    print(sum('0' <= ch <= '9' for ch in s))
 ```
 
 ### ✅ 解法三：正则表达式
@@ -191,7 +196,7 @@ n = int(input())
 for _ in range(n):
     s = input()
     # re.findall 返回所有匹配的列表，长度即为个数
-    print(len(re.findall(r'\d', s)))
+    print(len(re.findall(r'[0-9]', s)))
 ```
 
 ---
@@ -206,8 +211,8 @@ for _ in range(n):
 
 ### ⚠️ 易错提示
 
-1. `isdigit()` 对中文数字"一二三"也返回 `False`，这里没问题。
-2. 注意区分 `isdigit()` / `isnumeric()` / `isdecimal()`——本题只需判断 ASCII 数字，三者都行。
+1. 本题要统计的是 ASCII 数字字符 `'0'`~`'9'`，最稳妥的判断是 `'0' <= ch <= '9'`。
+2. `isdigit()` / `isnumeric()` / `isdecimal()` 在 Unicode 字符上规则不同，教学时不要把它们和 ASCII 范围判断混用。
 3. 字符串可能包含空格，`input()` 不会截断中间的空格，但会去掉行末换行。
 
 ---
@@ -432,7 +437,7 @@ for line in sys.stdin:
 
 | 方法              | 时间复杂度              | 空间复杂度 |
 | ----------------- | ----------------------- | ---------- |
-| append + sort     | O(n log n)              | O(1) 原地  |
+| append + sort     | O(n log n)              | O(n)       |
 | 线性扫描 + insert | O(n)                    | O(1)       |
 | bisect.insort     | O(n)（insert 移动元素） | O(1)       |
 
@@ -659,7 +664,7 @@ for line in sys.stdin:
 ### 📝 题目描述
 
 **输入**：多组数据。每组第一行两个整数 `m`（行数）、`n`（列数），后面 `m` 行每行 `n` 个整数，构成 `m×n` 矩阵。  
-**处理**：找出矩阵中**绝对值最大**的元素（保证唯一），输出其**行号、列号、值**（行列从 1 开始）。  
+**处理**：找出矩阵中**绝对值最大**的元素，输出其**行号、列号、值**（行列从 1 开始；若并列，取最先出现的元素）。<br>
 **结束条件**：EOF。
 
 **样例输入**：
@@ -726,14 +731,14 @@ while True:
     for i in range(m):
         matrix.append(list(map(int, input().split())))
 
-    # 构造 (绝对值, 行, 列, 原值) 的列表，取 max
+    # 构造 (行, 列, 原值) 的序列，按绝对值取 max；并列时 max 保留最先出现者
     best = max(
-        (abs(matrix[i][j]), i, j, matrix[i][j])
-        for i in range(m) for j in range(n)
+        ((i, j, matrix[i][j]) for i in range(m) for j in range(n)),
+        key=lambda item: abs(item[2])
     )
-    # best = (max_abs, row, col, original_value)
+    # best = (row, col, original_value)
 
-    print(f"{best[1] + 1} {best[2] + 1} {best[3]}")
+    print(f"{best[0] + 1} {best[1] + 1} {best[2]}")
 ```
 
 ---
@@ -763,7 +768,7 @@ while True:
 2. 每门课的平均成绩（保留 2 位小数），一行输出，空格分隔。
 3. 所有课成绩**都不低于**该科平均分的学生人数。
 
-每两组输出之间空一行。
+每组输出后空一行。
 
 **样例输入**：
 ```
@@ -775,7 +780,7 @@ while True:
 ```
 85.00 90.00
 82.50 92.50
-0
+1
 ```
 
 ---
@@ -794,17 +799,11 @@ while True:
 ```python
 import sys
 
-first = True                                  # 控制空行输出
-
 while True:
     try:
         n, m = map(int, input().split())
     except EOFError:
         break
-
-    if not first:                             # 两组输出之间空一行
-        print()
-    first = False
 
     # 读取成绩矩阵
     scores = []
@@ -835,10 +834,11 @@ while True:
         for j in range(m):
             if scores[i][j] < course_avg[j]:  # 低于该科平均分
                 all_pass = False
-                break                         # 有一门不及格就跳出
+                break                         # 有一门低于该科平均分就跳出
         if all_pass:
             count += 1
     print(count)
+    print()
 ```
 
 ### ✅ 简化写法（使用 `all()` + 列表推导）
@@ -846,17 +846,11 @@ while True:
 ```python
 import sys
 
-first = True
-
 while True:
     try:
         n, m = map(int, input().split())
     except EOFError:
         break
-
-    if not first:
-        print()
-    first = False
 
     scores = [list(map(int, input().split())) for _ in range(n)]
 
@@ -874,6 +868,7 @@ while True:
         if all(scores[i][j] >= crs_avg[j] for j in range(m))
     )
     print(count)
+    print()
 ```
 
 ---
@@ -889,7 +884,7 @@ while True:
 
 ### ⚠️ 易错提示
 
-1. **两组数据之间空一行**，但最后一组后面**不能空行**。用 `first` 标志控制。
+1. **每组数据输出后空一行**，最后一组后也按题面输出空行。
 2. **保留 2 位小数**：用 `f"{val:.2f}"` 或 `"%.2f" % val`。
 3. **是否 ≥ 该科平均分**：用的是**课程平均分**，不是学生自己的平均分！
 4. 浮点数比较：本题精度要求不高，直接 `>=` 即可。
@@ -1296,7 +1291,7 @@ for case in range(n):
 
 ### 📝 题目描述
 
-**输入**：多组数据。每组第一行一个 `n`，第二个数到第 n+1 个数为 `n` 个正整数。  
+**输入**：多组数据。每组一行，第一个数为 `n`，后面接 `n` 个正整数。<br>
 **输出**：这 `n` 个数的**最小公倍数（LCM）**。
 
 > 更准确地说，每行输入是 `n a1 a2 ... an`。
@@ -1624,14 +1619,12 @@ for line in sys.stdin:
     print(sign + convert(abs(N), R))
 ```
 
-### ✅ 解法三：利用 Python 内置函数（部分进制）
+### ✅ 解法三：`divmod` 写法
 
 ```python
 import sys
 
-# Python 内置只支持 2/8/16 进制
-# 对于任意进制还是需要手动实现
-# 但可以作为验证工具
+# divmod 同时返回商和余数，可让短除法写得更紧凑
 
 for line in sys.stdin:
     N, R = map(int, line.split())
@@ -1751,13 +1744,13 @@ for line in sys.stdin:
 | ---------- | ----------------------- | ---------- |
 | 二维列表   | O(n²)                   | O(n²)      |
 | 滚动数组   | O(n²)                   | O(n)       |
-| 组合数公式 | O(n²)（每次 comb O(k)） | O(n)       |
+| 组合数公式 | O(n²) 个输出项，`comb` 计算代价另计 | O(n)       |
 
 ### ⚠️ 易错提示
 
 1. **每组输出后空一行**，注意别漏 `print()`。
 2. 中间元素的递推循环是 `range(1, i)`，当 `i=0` 或 `i=1` 时不会执行，正好首尾为 1。
-3. `n ≤ 30` 时数值最大约 C(29,14) ≈ 1.7亿，Python 没有溢出问题。
+3. `n ≤ 30` 时数值最大约 C(29,14) = 77558760，Python 没有溢出问题。
 
 ---
 
@@ -1860,16 +1853,14 @@ for _ in range(T):
 
 ### 📝 题目描述
 
-**输入**：每行两个整数 `n`、`m`，表示集合 A 有 `n` 个元素、集合 B 有 `m` 个元素。之后一行 `n` 个整数为 A，再一行 `m` 个整数为 B。  
+**输入**：每组数据占一行，前两个整数 `n`、`m` 表示集合 A 有 `n` 个元素、集合 B 有 `m` 个元素，后面依次给出 A 的 `n` 个整数和 B 的 `m` 个整数。<br>
 **处理**：求 `A - B`（差集：属于 A 但不属于 B 的元素）。  
 **输出**：将差集**从小到大排序**输出。若差集为空，输出 `NULL`。  
 **结束条件**：`n == 0` 且 `m == 0`。
 
 **样例输入**：
 ```
-3 3
-1 2 3
-1 4 7
+3 3 1 2 3 1 4 7
 0 0
 ```
 **样例输出**：
@@ -1892,17 +1883,20 @@ for _ in range(T):
 import sys
 
 for line in sys.stdin:
-    n, m = map(int, line.split())
+    data = list(map(int, line.split()))
+    if not data:
+        continue
+    n, m = data[0], data[1]
     if n == 0 and m == 0:
         break
 
-    A = set(map(int, input().split()))         # 读入集合 A
-    B = set(map(int, input().split()))         # 读入集合 B
+    A = set(data[2:2 + n])                     # 读入集合 A
+    B = set(data[2 + n:2 + n + m])             # 读入集合 B
 
     diff = sorted(A - B)                       # A - B 差集，排序输出
 
     if diff:
-        print(' '.join(map(str, diff)))
+        print(' '.join(map(str, diff)) + ' ')
     else:
         print("NULL")
 ```
@@ -1915,18 +1909,21 @@ for line in sys.stdin:
 import sys
 
 for line in sys.stdin:
-    n, m = map(int, line.split())
+    data = list(map(int, line.split()))
+    if not data:
+        continue
+    n, m = data[0], data[1]
     if n == 0 and m == 0:
         break
 
-    A = list(map(int, input().split()))
-    B = set(map(int, input().split()))         # B 转 set 加速查找
+    A = data[2:2 + n]
+    B = set(data[2 + n:2 + n + m])             # B 转 set 加速查找
 
     # 从 A 中筛选出不在 B 中的元素
     diff = sorted(x for x in A if x not in B)
 
     if diff:
-        print(' '.join(map(str, diff)))
+        print(' '.join(map(str, diff)) + ' ')
     else:
         print("NULL")
 ```
@@ -1939,16 +1936,19 @@ for line in sys.stdin:
 import sys
 
 for line in sys.stdin:
-    n, m = map(int, line.split())
+    data = list(map(int, line.split()))
+    if not data:
+        continue
+    n, m = data[0], data[1]
     if n == 0 and m == 0:
         break
 
-    A = list(map(int, input().split()))
-    B = list(map(int, input().split()))        # B 保持列表
+    A = data[2:2 + n]
+    B = data[2 + n:2 + n + m]                  # B 保持列表
 
     diff = sorted([x for x in A if x not in B])  # 每次 in 都是 O(m)
 
-    print(' '.join(map(str, diff)) if diff else "NULL")
+    print(' '.join(map(str, diff)) + ' ' if diff else "NULL")
 ```
 
 ---
@@ -1966,7 +1966,7 @@ for line in sys.stdin:
 1. **差集为空输出 `NULL`**，不是 `EMPTY` 或空行。
 2. **结果要排序**，从小到大。
 3. A 中可能有重复元素（如果用 `set(A)` 会自动去重）。根据题意，一般 A 中元素不重复。如果可能重复，需注意是否保留重复。
-4. 注意本题每组数据**先读 A 再读 B**，各在单独一行。
+4. 注意本题每组数据在**同一行**，顺序是 `n m`、A 的元素、B 的元素。
 
 ---
 
@@ -1995,7 +1995,7 @@ for line in sys.stdin:
 ### 💡 解题思路
 
 "最后三位数" = 对 1000 取模。  
-直接算 `A^B` 可能非常大，但 Python 支持大整数，可以先算再取模。  
+直接算 `A^B` 可能非常大，即使 Python 支持大整数也不适合提交。<br>
 更好的做法是使用**快速幂取模**或 Python 内置的 `pow(a, b, mod)`。
 
 ---
@@ -2015,7 +2015,7 @@ for line in sys.stdin:
 
 > **`pow(a, b, mod)`** 是 Python 内置的三参数幂运算，**自动执行快速幂取模**，时间复杂度 O(log B)。这是 Python 的一个强大特性。
 
-### ✅ 解法二：先算大数再取模（暴力，Python 可行）
+### ✅ 解法二：先算大数再取模（不推荐演示版）
 
 ```python
 import sys
@@ -2027,7 +2027,7 @@ for line in sys.stdin:
     print((A ** B) % 1000)                     # 先算 A^B 再取模
 ```
 
-> Python 的大整数不会溢出，但 `A^B` 可能极大（如 `999^999999`），计算非常慢。**竞赛中不推荐**。
+> Python 的大整数不会溢出，但 `A^B` 可能极大（如 `999^999999`），会构造巨大的中间整数。**竞赛中不推荐**。
 
 ### ✅ 解法三：手写快速幂取模（教学理解用）
 
@@ -2067,7 +2067,7 @@ for line in sys.stdin:
 | 方法              | 时间复杂度       | 空间复杂度  |
 | ----------------- | ---------------- | ----------- |
 | `pow(A, B, 1000)` | O(log B)         | O(1)        |
-| `A ** B % 1000`   | O(B)（大数乘法） | O(B 的位数) |
+| `A ** B % 1000`   | 远高于快速幂取模，受巨大中间整数影响 | O(B 的位数) |
 | 手写快速幂        | O(log B)         | O(1)        |
 
 ### ⚠️ 易错提示

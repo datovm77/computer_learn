@@ -147,7 +147,7 @@ for line in sys.stdin:
 
 **Output**
 
-对于每组输入，输出对应的矩形图案。每两个矩形之间输出一个空行。
+对于每组输入，输出对应的矩形图案。每个矩形后输出一个空行。
 
 **Sample Input**
 ```
@@ -185,17 +185,12 @@ for line in sys.stdin:
 ```python
 import sys
 
-first = True                              # 标记是否为第一个矩形，用于控制空行
 for line in sys.stdin:
     line = line.strip()
     if not line:                          # 跳过空行
         continue
     w, h = map(int, line.split())         # 读取宽 W 和高 H
-    
-    if not first:                         # 如果不是第一个矩形，先输出一个空行分隔
-        print()
-    first = False                         # 第一个矩形输出后，后续都不是第一个了
-    
+
     # 第一行：边框行
     print('+' + '-' * w + '+')            # "+" 开头，w 个 "-"，"+" 结尾
     
@@ -205,6 +200,7 @@ for line in sys.stdin:
     
     # 最后一行：边框行（和第一行一样）
     print('+' + '-' * w + '+')
+    print()
 ```
 
 **复杂度分析**
@@ -247,7 +243,7 @@ for line in sys.stdin:
 
 ### ⚠️ 易错提示
 
-1. **空行分隔**：两个矩形之间需要一个空行，但**最后一个矩形后面不要多输出空行**，否则可能 PE（Presentation Error）。
+1. **空行分隔**：每个矩形后面都要输出一个空行，这是题面要求。
 2. **W 和 H 的含义**：W 是内部宽度（不含边框），H 是内部高度（不含边框），总输出是 (H+2) 行 × (W+2) 列。
 3. **行尾不要有多余空格**：某些 OJ 对行尾空格很敏感，但本题使用字符串拼接一般不会出问题。
 
@@ -952,11 +948,7 @@ for line in sys.stdin:
 ```
 
 > **`hex()` 对负数的行为**：
-> ```python
-> hex(-10)   # → '-0xa'
-> hex(10)    # → '0xa'
-> ```
-> 负数会在前面加 `-`，所以负数需要切掉前 3 个字符 `-0x`。
+> `hex(-10) -> '-0xa'`，`hex(10) -> '0xa'`。负数会在前面加 `-`，所以负数需要切掉前 3 个字符 `-0x`。
 
 **复杂度分析**
 - 同解法一
@@ -1018,4 +1010,3 @@ for line in sys.stdin:
 > | 精确整数平方根 | `math.isqrt(n)` (Python 3.8+)             |
 > | 格式化输出     | `f"{value:.2f}"`, `format(n, 'X')`        |
 > | 字符 ↔ ASCII   | `ord('A')` = 65, `chr(65)` = 'A'          |
-

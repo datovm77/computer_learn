@@ -33,7 +33,7 @@ for _ in range(n):
 
 ### 🔧 教学版补充：更鲁棒的输入模板（推荐）
 
-很多 OJ 数据中可能夹带空行，或者数字行前后有多余空格。教学场景建议封装一个“跳过空行”的读取函数：
+很多 OJ 数据中可能夹带空行，或者数字行前后有多余空格。教学场景建议封装一个“跳过空行”的读取函数。注意：下面示例仅适用于题面明确分两行的题，HDU 中很多 `n + 数据` 是同一行，需要按题面改成逐行解析。
 
 ```python
 import sys
@@ -70,20 +70,20 @@ while True:
 
 > 输入三个字符后，按各字符的 ASCII 码从小到大的顺序输出这三个字符。
 >
-> **输入**：多组测试数据，每组一行包含三个字符，字符之间用一个空格分隔。
+> **输入**：多组测试数据，每组一行包含三个连续字符，字符之间没有空格。
 >
 > **输出**：对于每组输入数据，输出一行，字符中间用一个空格分隔。
 
 **样例输入**：
 
 ```
-q s a
+qwe
 ```
 
 **样例输出**：
 
 ```
-a q s
+e q w
 ```
 
 ---
@@ -103,7 +103,10 @@ a q s
 import sys
 
 for line in sys.stdin:                    # 持续读取每一行，直到 EOF
-    chars = line.split()                  # 按空格切分，得到三个字符的列表
+    s = line.strip()
+    if not s:
+        continue
+    chars = list(s)                       # 每行三个连续字符
     chars.sort()                          # 原地排序（按 ASCII 码值升序）
     print(' '.join(chars))               # 用空格连接输出
 ```
@@ -123,7 +126,10 @@ for line in sys.stdin:                    # 持续读取每一行，直到 EOF
 import sys
 
 for line in sys.stdin:
-    a, b, c = line.split()               # 读取三个字符
+    s = line.strip()
+    if not s:
+        continue
+    a, b, c = s                           # 读取三个连续字符
 
     # 两两比较，确保 a <= b <= c（冒泡思想）
     if a > b:                             # 如果第一个 > 第二个，交换
@@ -142,7 +148,7 @@ for line in sys.stdin:
 
 ### ⚠️ 易错提示
 
-1. **`input().split()` 返回的是字符串列表**，不是字符。但对于单字符来说效果一致。
+1. **原题输入的三个字符是连续写在一起的**，不要用 `split()` 当作空格分隔读取。
 2. **不要忘记多组输入**。很多人只处理了一组，提交后 WA。
 3. Python 中字符串比较就是按 Unicode 码值，无需手动 `ord()` 转换。
 
@@ -244,7 +250,7 @@ for line in sys.stdin:
 
 > 根据输入的半径值 r，计算球的体积。
 >
-> **公式**：$V = \frac{4}{3} \pi r^3$
+> **公式**：$V = \frac{4}{3} \pi r^3$，其中题面指定 `PI = 3.1415927`。
 >
 > **输入**：多组测试数据，每行一个实数 r。
 >
@@ -272,15 +278,16 @@ for line in sys.stdin:
 
 ---
 
-### ✅ 解法一：使用 `math.pi`（推荐）
+### ✅ 解法一：使用题面 PI 常量（推荐）
 
 ```python
 import sys
-import math
+
+PI = 3.1415927
 
 for line in sys.stdin:
     r = float(line.strip())                         # 读取半径
-    volume = (4 / 3) * math.pi * r ** 3             # 球体积公式
+    volume = (4 / 3) * PI * r ** 3                  # 球体积公式
     print(f"{volume:.3f}")                           # 保留三位小数
 ```
 
@@ -292,9 +299,11 @@ for line in sys.stdin:
 import sys
 import math
 
+PI = 3.1415927
+
 for line in sys.stdin:
     r = float(line.strip())
-    volume = (4.0 / 3.0) * math.pi * math.pow(r, 3)  # math.pow 返回浮点数
+    volume = (4.0 / 3.0) * PI * math.pow(r, 3)       # math.pow 返回浮点数
     print(f"{volume:.3f}")
 ```
 
@@ -305,7 +314,7 @@ for line in sys.stdin:
 ### ⚠️ 易错提示
 
 1. **Python 3 中 `4/3 = 1.333...`** 是浮点除法，这与 C/C++ 不同（C 中 `4/3 = 1`）。但还是建议写 `4.0 / 3.0` 以明确意图。
-2. **π 的精度**：必须使用 `math.pi`，不要手写 `3.14159`，精度不够会 WA。
+2. **π 的取值**：按题面使用 `3.1415927`，不要随意改成 `3.14159`。
 3. 注意保留 **三位** 小数。
 
 ---
@@ -392,7 +401,7 @@ for line in sys.stdin:
 >
 > **输入**：多组测试数据，每行一个整数成绩。
 >
-> **输出**：每行输出对应等级。
+> **输出**：每行输出对应等级；成绩不在 `0~100` 范围内时输出 `Score is error!`。
 
 **样例输入**：
 
@@ -580,15 +589,14 @@ for line in sys.stdin:
 
 > 给定 n 个整数，要求你求出其中所有奇数的乘积。
 >
-> **输入**：多组测试数据，每组第一行为 n，第二行为 n 个整数。
+> **输入**：多组测试数据，每组一行，第一个数为 n，后面接 n 个整数。
 >
 > **输出**：每组输出所有奇数的乘积。（保证至少有一个奇数）
 
 **样例输入**：
 
 ```
-3
-1 2 3
+3 1 2 3
 ```
 
 **样例输出**：
@@ -611,19 +619,19 @@ for line in sys.stdin:
 ```python
 import sys
 
-while True:
-    try:
-        n = int(input())                          # 读取整数个数
-        nums = list(map(int, input().split()))[:n]  # 严格按 n 个整数处理
+for line in sys.stdin:
+    data = list(map(int, line.split()))
+    if not data:
+        continue
+    n = data[0]                                   # 第一个数是整数个数
+    nums = data[1:1 + n]                          # 后面 n 个整数
 
-        product = 1                                # 乘积初始化为 1（乘法单位元）
-        for x in nums:
-            if x % 2 != 0:                         # 判断奇数
-                product *= x                       # 累乘
+    product = 1                                   # 乘积初始化为 1（乘法单位元）
+    for x in nums:
+        if x % 2 != 0:                            # 判断奇数
+            product *= x                          # 累乘
 
-        print(product)
-    except EOFError:
-        break
+    print(product)
 ```
 
 ---
@@ -633,17 +641,18 @@ while True:
 ```python
 from functools import reduce
 import operator
+import sys
 
-while True:
-    try:
-        n = int(input())
-        nums = list(map(int, input().split()))[:n]
+for line in sys.stdin:
+    data = list(map(int, line.split()))
+    if not data:
+        continue
+    n = data[0]
+    nums = data[1:1 + n]
 
-        odds = filter(lambda x: x % 2 != 0, nums)    # 筛选所有奇数
-        product = reduce(operator.mul, odds)           # 连乘
-        print(product)
-    except EOFError:
-        break
+    odds = filter(lambda x: x % 2 != 0, nums)       # 筛选所有奇数
+    product = reduce(operator.mul, odds)            # 连乘
+    print(product)
 ```
 
 **复杂度分析**：
@@ -762,15 +771,14 @@ for line in sys.stdin:
 
 > 统计给定 n 个数中，负数、零和正数的个数。
 >
-> **输入**：多组测试数据，每组第一行为 n（n=0 结束），第二行为 n 个数。
+> **输入**：多组测试数据，每组一行，第一个数为 n（n=0 结束），后面接 n 个数。
 >
 > **输出**：每组输出负数个数、零的个数、正数个数，用一个空格分隔。
 
 **样例输入**：
 
 ```
-6
-0 1 2 3 -1 0
+6 0 1 2 3 -1 0
 0
 ```
 
@@ -792,26 +800,28 @@ for line in sys.stdin:
 ### ✅ 解法一：循环计数
 
 ```python
-while True:
-    try:
-        n = int(input())
-        if n == 0:                                   # n=0 表示结束
-            break
+import sys
 
-        nums = list(map(float, input().split()))[:n]  # 严格按 n 个数据统计
-        neg = zero = pos = 0                         # 初始化三个计数器
-
-        for x in nums:
-            if x < 0:
-                neg += 1
-            elif x == 0:
-                zero += 1
-            else:
-                pos += 1
-
-        print(neg, zero, pos)
-    except EOFError:
+for line in sys.stdin:
+    data = line.split()
+    if not data:
+        continue
+    n = int(data[0])
+    if n == 0:                                      # n=0 表示结束
         break
+
+    nums = list(map(float, data[1:1 + n]))          # 严格按 n 个数据统计
+    neg = zero = pos = 0                            # 初始化三个计数器
+
+    for x in nums:
+        if x < 0:
+            neg += 1
+        elif x == 0:
+            zero += 1
+        else:
+            pos += 1
+
+    print(neg, zero, pos)
 ```
 
 ---
@@ -819,21 +829,23 @@ while True:
 ### ✅ 解法二：推导式
 
 ```python
-while True:
-    try:
-        n = int(input())
-        if n == 0:
-            break
+import sys
 
-        nums = list(map(float, input().split()))[:n]
-
-        neg  = sum(1 for x in nums if x < 0)        # 负数个数
-        zero = sum(1 for x in nums if x == 0)        # 零的个数
-        pos  = sum(1 for x in nums if x > 0)         # 正数个数
-
-        print(neg, zero, pos)
-    except EOFError:
+for line in sys.stdin:
+    data = line.split()
+    if not data:
+        continue
+    n = int(data[0])
+    if n == 0:
         break
+
+    nums = list(map(float, data[1:1 + n]))
+
+    neg  = sum(1 for x in nums if x < 0)            # 负数个数
+    zero = sum(1 for x in nums if x == 0)           # 零的个数
+    pos  = sum(1 for x in nums if x > 0)            # 正数个数
+
+    print(neg, zero, pos)
 ```
 
 **复杂度分析**：O(n) 时间, O(n) 空间（存储列表）。
@@ -1328,21 +1340,20 @@ for line in sys.stdin:
 
 > 青年歌手大奖赛中，评委会给出的分数去掉一个最高分和一个最低分后，求平均分。
 >
-> **输入**：多组测试数据，每组第一行为评委人数 n (n > 2)，第二行为 n 个评分。
+> **输入**：多组测试数据，每组一行，第一个数为评委人数 n (n > 2)，后面接 n 个评分。
 >
 > **输出**：每组输出平均分，保留两位小数。
 
 **样例输入**：
 
 ```
-6
-10 9 8 7.5 9.5 8
+6 10 9 8 7.5 9.5 8
 ```
 
 **样例输出**：
 
 ```
-8.63
+8.62
 ```
 
 ---
@@ -1357,17 +1368,19 @@ for line in sys.stdin:
 ### ✅ 解法一：排序后切片
 
 ```python
-while True:
-    try:
-        n = int(input())
-        scores = list(map(float, input().split()))[:n]
+import sys
 
-        scores.sort()                                  # 排序
-        trimmed = scores[1:-1]                         # 去掉第一个(最小)和最后一个(最大)
-        avg = sum(trimmed) / len(trimmed)              # 求平均
-        print(f"{avg:.2f}")
-    except EOFError:
-        break
+for line in sys.stdin:
+    data = list(map(float, line.split()))
+    if not data:
+        continue
+    n = int(data[0])
+    scores = data[1:1 + n]
+
+    scores.sort()                                  # 排序
+    trimmed = scores[1:-1]                         # 去掉第一个(最小)和最后一个(最大)
+    avg = sum(trimmed) / len(trimmed)              # 求平均
+    print(f"{avg:.2f}")
 ```
 
 ---
@@ -1375,16 +1388,18 @@ while True:
 ### ✅ 解法二：`sum - max - min`（推荐）
 
 ```python
-while True:
-    try:
-        n = int(input())
-        scores = list(map(float, input().split()))[:n]
+import sys
 
-        total = sum(scores) - max(scores) - min(scores)   # 总分减最高减最低
-        avg = total / (n - 2)                              # 剩余人数 = n-2
-        print(f"{avg:.2f}")
-    except EOFError:
-        break
+for line in sys.stdin:
+    data = list(map(float, line.split()))
+    if not data:
+        continue
+    n = int(data[0])
+    scores = data[1:1 + n]
+
+    total = sum(scores) - max(scores) - min(scores)   # 总分减最高减最低
+    avg = total / (n - 2)                              # 剩余人数 = n-2
+    print(f"{avg:.2f}")
 ```
 
 **复杂度分析**：
