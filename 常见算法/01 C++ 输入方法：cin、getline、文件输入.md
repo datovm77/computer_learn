@@ -1189,7 +1189,256 @@ int main() {
 
 ---
 
-## 五、总结与速查表
+## 五、补充：C++ 输出精度控制
+
+虽然本篇主要讲输入，但在算法题和日常程序中，浮点数输出格式也非常常见。比如题目要求“保留 2 位小数”或“误差不超过 `1e-6`”，这时就需要控制输出精度。
+
+---
+
+### 5.1 `setprecision(n)` —— 设置有效数字位数
+
+#### 头文件
+
+```cpp
+#include <iomanip>
+```
+
+#### 默认含义：控制“有效数字”位数
+
+单独使用 `setprecision(n)` 时，`n` 表示**有效数字位数**，不是小数点后位数。
+
+```cpp
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
+int main() {
+    double x = 123.456789;
+
+    cout << setprecision(3) << x << endl;
+    cout << setprecision(6) << x << endl;
+
+    return 0;
+}
+```
+
+输出：
+
+```
+123
+123.457
+```
+
+这里 `setprecision(3)` 输出的是 3 位有效数字，所以结果是 `123`，不是 `123.457`。
+
+#### 什么是有效数字？
+
+有效数字是从第一个非零数字开始计数的数字位数。
+
+| 数值       | 3 位有效数字的输出 |
+| ---------- | ------------------ |
+| `123.456`  | `123`              |
+| `12.3456`  | `12.3`             |
+| `1.23456`  | `1.23`             |
+| `0.012345` | `0.0123`           |
+
+这就是为什么只写 `setprecision(n)` 时，有时看起来不像“保留 n 位小数”。
+
+---
+
+### 5.2 `fixed + setprecision(n)` —— 保留小数点后 n 位
+
+如果题目要求“保留 n 位小数”，最常用写法是：
+
+```cpp
+cout << fixed << setprecision(n) << x << endl;
+```
+
+其中：
+- `fixed` 表示使用普通小数形式输出，不使用科学计数法。
+- `setprecision(n)` 在 `fixed` 状态下表示**小数点后保留 n 位**。
+
+#### 示例：保留 2 位小数
+
+```cpp
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
+int main() {
+    double pi = 3.1415926;
+    double money = 12;
+
+    cout << fixed << setprecision(2) << pi << endl;
+    cout << fixed << setprecision(2) << money << endl;
+
+    return 0;
+}
+```
+
+输出：
+
+```
+3.14
+12.00
+```
+
+这是算法题中最常用的浮点输出方式。
+
+#### 常见模板
+
+```cpp
+double ans;
+cout << fixed << setprecision(6) << ans << endl;
+```
+
+如果题目要求误差不超过 `1e-6`，通常输出 6 到 10 位小数都可以。例如：
+
+```cpp
+cout << fixed << setprecision(10) << ans << endl;
+```
+
+---
+
+### 5.3 `scientific` —— 科学计数法输出
+
+如果希望用科学计数法输出，可以使用 `scientific`：
+
+```cpp
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
+int main() {
+    double x = 123456789.0;
+
+    cout << scientific << setprecision(3) << x << endl;
+
+    return 0;
+}
+```
+
+输出：
+
+```
+1.235e+08
+```
+
+在 `scientific` 状态下，`setprecision(n)` 也表示**小数点后 n 位**。
+
+---
+
+### 5.4 `defaultfloat` —— 恢复默认浮点格式
+
+`fixed`、`scientific` 这类格式设置会一直影响后续输出，直到你修改它。
+
+```cpp
+double x = 3.1415926;
+
+cout << fixed << setprecision(2) << x << endl;      // 3.14
+cout << x << endl;                                  // 3.14，仍然受 fixed 和 setprecision(2) 影响
+cout << defaultfloat << setprecision(6) << x << endl; // 3.14159，恢复默认格式
+```
+
+也就是说，输出格式是“粘住的”（sticky）。一旦设置了 `fixed` 或 `setprecision`，后面的 `cout` 也会继续沿用这个设置。
+
+---
+
+### 5.5 `cout.precision(n)` —— 成员函数写法
+
+除了 `setprecision(n)`，也可以使用 `cout.precision(n)`：
+
+```cpp
+double x = 3.1415926;
+
+cout.precision(4);
+cout << x << endl;  // 默认格式下：4 位有效数字
+
+cout << fixed;
+cout.precision(4);
+cout << x << endl;  // fixed 格式下：小数点后 4 位
+```
+
+这两种写法效果类似：
+
+```cpp
+cout << setprecision(4);
+cout.precision(4);
+```
+
+算法题中更常见的是 `setprecision`，因为它可以直接写在输出语句里。
+
+---
+
+### 5.6 控制精度不是改变变量本身
+
+输出精度只影响“显示出来的样子”，不会改变变量内部保存的值。
+
+```cpp
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
+int main() {
+    double x = 3.1415926;
+
+    cout << fixed << setprecision(2) << x << endl; // 显示 3.14
+    cout << fixed << setprecision(5) << x << endl; // 仍然可以显示 3.14159
+
+    return 0;
+}
+```
+
+`setprecision(2)` 并没有把 `x` 变成 `3.14`，只是输出时按 2 位小数显示。
+
+如果你真的需要把数值四舍五入到某个位数再参与后续计算，就不能只依赖输出格式，而要使用 `round` 等函数。但在大多数算法题中，只需要控制最终输出即可。
+
+---
+
+### 5.7 与 C 风格 `printf` 的对比
+
+C++ 的 `cout` 写法：
+
+```cpp
+cout << fixed << setprecision(2) << x << endl;
+```
+
+C 风格的 `printf` 写法：
+
+```cpp
+printf("%.2f\n", x);
+```
+
+两者都可以输出小数点后 2 位。C++ 中如果使用 `printf`，需要包含：
+
+```cpp
+#include <cstdio>
+```
+
+在 C++ 程序中，建议优先统一使用 `cout` / `cin`，不要频繁混用 `cout` 和 `printf`，除非你明确知道自己在做什么。
+
+---
+
+### 5.8 常见输出格式速查
+
+| 需求                    | 写法                                      |
+| ----------------------- | ----------------------------------------- |
+| 保留 2 位小数           | `cout << fixed << setprecision(2) << x;`  |
+| 保留 6 位小数           | `cout << fixed << setprecision(6) << x;`  |
+| 输出 10 位有效数字      | `cout << setprecision(10) << x;`          |
+| 使用科学计数法，保留 3 位小数 | `cout << scientific << setprecision(3) << x;` |
+| 恢复默认浮点格式        | `cout << defaultfloat;`                   |
+
+### 初学者最容易混淆的点
+
+1. **`setprecision(n)` 单独使用时，控制的是有效数字位数。**
+2. **`fixed << setprecision(n)` 一起使用时，控制的是小数点后位数。**
+3. **这些格式设置会持续影响后续输出，不是只对当前一个变量生效。**
+4. **控制输出精度只改变显示效果，不改变变量本身的值。**
+
+---
+
+## 六、总结与速查表
 
 ### 各输入方式一览
 
