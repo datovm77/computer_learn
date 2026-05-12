@@ -1189,9 +1189,9 @@ int main() {
 
 ---
 
-## 五、补充：C++ 输出精度控制
+## 五、补充：C++ 输出格式控制
 
-虽然本篇主要讲输入，但在算法题和日常程序中，浮点数输出格式也非常常见。比如题目要求“保留 2 位小数”或“误差不超过 `1e-6`”，这时就需要控制输出精度。
+虽然本篇主要讲输入，但在算法题和日常程序中，输出格式也非常常见。比如题目要求“保留 2 位小数”“编号补 0 到 4 位”“按列对齐输出表格”，这时就需要使用 `<iomanip>` 中的格式控制工具。
 
 ---
 
@@ -1576,7 +1576,303 @@ printf("%.2f\n", x);
 
 ---
 
-### 5.9 常见输出格式速查
+### 5.9 `setw(n)` —— 设置输出宽度
+
+#### 头文件
+
+```cpp
+#include <iomanip>
+```
+
+#### 作用
+
+`setw(n)` 用来设置**下一个输出项的最小宽度**。
+
+如果实际输出内容长度小于 `n`，就用填充字符补齐；如果实际输出内容长度大于或等于 `n`，则正常完整输出，**不会截断内容**。
+
+#### 示例 1：默认右对齐
+
+```cpp
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
+int main() {
+    cout << "[" << setw(5) << 42 << "]" << endl;
+    cout << "[" << setw(5) << "Hi" << "]" << endl;
+    cout << "[" << setw(5) << "HelloWorld" << "]" << endl;
+
+    return 0;
+}
+```
+
+输出：
+
+```
+[   42]
+[   Hi]
+[HelloWorld]
+```
+
+可以看到：
+- `42` 长度为 2，不足 5 位，左边补 3 个空格。
+- `Hi` 长度为 2，不足 5 位，左边补 3 个空格。
+- `HelloWorld` 长度超过 5，直接完整输出，不会被截断。
+
+#### `setw` 只影响紧跟着的一个输出项
+
+这是 `setw` 最重要的特点：它不是“粘住的”，只对**下一个**被输出的值生效。
+
+```cpp
+cout << setw(5) << 1 << 2 << 3 << endl;
+```
+
+输出：
+
+```
+    123
+```
+
+只有 `1` 被设置了宽度，`2` 和 `3` 不受影响。如果希望每一列都占固定宽度，必须每次都写 `setw`：
+
+```cpp
+cout << setw(5) << 1 << setw(5) << 2 << setw(5) << 3 << endl;
+```
+
+输出：
+
+```
+    1    2    3
+```
+
+#### 示例 2：按列输出表格
+
+```cpp
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
+int main() {
+    cout << left << setw(10) << "Name"
+         << right << setw(6) << "Score" << endl;
+
+    cout << left << setw(10) << "Alice"
+         << right << setw(6) << 95 << endl;
+
+    cout << left << setw(10) << "Bob"
+         << right << setw(6) << 8 << endl;
+
+    return 0;
+}
+```
+
+输出：
+
+```
+Name       Score
+Alice          95
+Bob             8
+```
+
+这类写法常用于调试时打印数组、矩阵、统计表。
+
+---
+
+### 5.10 `setfill(ch)` —— 设置填充字符
+
+#### 作用
+
+`setfill(ch)` 用来设置当输出宽度不够时，用什么字符补齐。默认填充字符是空格 `' '`。
+
+最常见的用法是配合 `setw` 进行**前导补 0**。
+
+#### 示例 1：编号补 0
+
+```cpp
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
+int main() {
+    int id = 7;
+
+    cout << setfill('0') << setw(4) << id << endl;
+
+    return 0;
+}
+```
+
+输出：
+
+```
+0007
+```
+
+这里 `setw(4)` 表示最小宽度为 4，`setfill('0')` 表示不足的位置用字符 `'0'` 补齐。
+
+#### 示例 2：时间格式
+
+```cpp
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
+int main() {
+    int h = 9, m = 5, s = 7;
+
+    cout << setfill('0')
+         << setw(2) << h << ":"
+         << setw(2) << m << ":"
+         << setw(2) << s << endl;
+
+    return 0;
+}
+```
+
+输出：
+
+```
+09:05:07
+```
+
+注意：因为 `setw` 只影响下一个输出项，所以 `h`、`m`、`s` 前面都要分别写 `setw(2)`；但 `setfill('0')` 会持续生效，所以只需要写一次。
+
+#### `setfill` 是“粘住的”
+
+与 `setw` 不同，`setfill` 会一直影响同一个输出流，直到你重新设置填充字符。
+
+```cpp
+cout << setfill('0') << setw(4) << 7 << endl;  // 0007
+cout << setw(4) << 8 << endl;                  // 0008，仍然用 0 填充
+
+cout << setfill(' ') << setw(4) << 9 << endl;  //    9，恢复为空格填充
+```
+
+所以，如果你只是临时补 0，后面又要正常按空格对齐，记得恢复：
+
+```cpp
+cout << setfill(' ');
+```
+
+---
+
+### 5.11 对齐方式：`left`、`right`、`internal`
+
+#### `right`：右对齐（默认）
+
+默认情况下，输出是右对齐的，填充字符放在左边。
+
+```cpp
+cout << "[" << setw(5) << 42 << "]" << endl;
+```
+
+输出：
+
+```
+[   42]
+```
+
+#### `left`：左对齐
+
+`left` 表示左对齐，填充字符放在右边。
+
+```cpp
+cout << left << "[" << setw(5) << 42 << "]" << endl;
+```
+
+输出：
+
+```
+[42   ]
+```
+
+`left` 常用于输出文本列，例如姓名、城市名等。
+
+#### `internal`：符号在最左，填充在符号和数字之间
+
+当输出带符号数字并且使用 `0` 填充时，`internal` 很有用。
+
+```cpp
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
+int main() {
+    cout << setfill('0');
+
+    cout << right << setw(6) << -42 << endl;
+    cout << internal << setw(6) << -42 << endl;
+
+    return 0;
+}
+```
+
+输出：
+
+```
+000-42
+-00042
+```
+
+一般来说，如果你想让负数看起来像“符号 + 前导 0 + 数字”，可以使用 `internal`。
+
+#### 对齐方式也是“粘住的”
+
+`left`、`right`、`internal` 和 `fixed` 一样，会一直影响同一个输出流，直到你改成其他对齐方式。
+
+```cpp
+cout << left << setw(8) << "A" << endl;
+cout << setw(8) << "B" << endl;       // 仍然左对齐
+cout << right << setw(8) << "C" << endl; // 改回右对齐
+```
+
+---
+
+### 5.12 `setw` 在输入中的少见用法
+
+`setw` 也可以用于输入，不过实际开发和算法题中用得不多。它的主要作用是限制下一次读取的最大宽度，常见于读取 C 风格字符数组时避免数组越界。
+
+```cpp
+#include <iostream>
+#include <iomanip>
+using namespace std;
+
+int main() {
+    char name[10];
+
+    cin >> setw(10) >> name;  // 最多读取 9 个有效字符，最后 1 个位置留给 '\0'
+    cout << name << endl;
+
+    return 0;
+}
+```
+
+如果输入：
+
+```
+Alexanderson
+```
+
+`name` 中会存入：
+
+```
+Alexander
+```
+
+最后一个位置用于存放字符串结束标记 `'\0'`。
+
+对于 `std::string`，`setw(n)` 也能限制下一次 `>>` 最多读取 `n` 个字符，但这种写法不如直接使用 `getline` 或自己处理字符串常见。
+
+```cpp
+string s;
+cin >> setw(5) >> s;   // 最多读取 5 个字符到 s
+```
+
+需要注意：用于输入时，`setw` 同样只影响下一次读取操作。
+
+---
+
+### 5.13 常见输出格式速查
 
 | 需求                         | 写法                                      |
 | ---------------------------- | ----------------------------------------- |
@@ -1584,6 +1880,12 @@ printf("%.2f\n", x);
 | 保留 6 位小数并四舍五入显示  | `cout << fixed << setprecision(6) << x;`  |
 | 输出 10 位有效数字           | `cout << setprecision(10) << x;`          |
 | 使用科学计数法，保留 3 位小数 | `cout << scientific << setprecision(3) << x;` |
+| 宽度不足 5 位时左边补空格    | `cout << setw(5) << x;`                   |
+| 每个数字占 5 位输出          | `cout << setw(5) << a << setw(5) << b;`   |
+| 编号补 0 到 4 位             | `cout << setfill('0') << setw(4) << id;`  |
+| 表格文本左对齐               | `cout << left << setw(10) << name;`       |
+| 表格数字右对齐               | `cout << right << setw(6) << score;`      |
+| 恢复空格填充                 | `cout << setfill(' ');`                   |
 | 恢复默认浮点格式             | `cout << defaultfloat << setprecision(6);` |
 | 取消浮点格式标志             | `cout.unsetf(ios::floatfield);`           |
 | 得到四舍五入后的 2 位小数值  | `round(x * 100) / 100.0`                  |
@@ -1596,6 +1898,8 @@ printf("%.2f\n", x);
 3. **`fixed` 和 `setprecision` 会持续影响同一个输出流，除非用 `defaultfloat`、`unsetf` 或重新设置。**
 4. **控制输出精度只改变显示效果，不改变变量本身的值。**
 5. **`setprecision` 的保留小数是四舍五入式显示，不是直接截断。**
+6. **`setw(n)` 只影响下一个输出项，想让多列都对齐就要反复写。**
+7. **`setfill(ch)`、`left`、`right`、`internal` 会持续影响同一个输出流，用完后需要按情况恢复。**
 
 ---
 
