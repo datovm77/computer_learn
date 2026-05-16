@@ -43,9 +43,16 @@ public:
         this->name = name;    // 明确指定是成员变量
         this->score = score;
     }
-    
+};
+
+class Student2 {
+private:
+    string name;
+    int score;
+
+public:
     // 不用 this 的话需要用不同的名字
-    Student(string n, int s) {
+    Student2(string n, int s) {
         name = n;
         score = s;
     }
@@ -140,6 +147,15 @@ private:
     int size;
     
 public:
+    Array(int s = 0) : data(s > 0 ? new int[s]{} : nullptr), size(s) {}
+
+    Array(const Array& other)
+        : data(other.size > 0 ? new int[other.size] : nullptr), size(other.size) {
+        for (int i = 0; i < size; i++) {
+            data[i] = other.data[i];
+        }
+    }
+
     Array& operator=(const Array& other) {
         if (this == &other) {  // 检查自我赋值
             return *this;
@@ -154,6 +170,10 @@ public:
         }
         
         return *this;  // 返回自身以支持连续赋值 a = b = c;
+    }
+
+    ~Array() {
+        delete[] data;
     }
 };
 ```

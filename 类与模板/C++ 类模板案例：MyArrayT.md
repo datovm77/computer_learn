@@ -178,6 +178,10 @@ MyArray(const MyArray& other) {
 ```cpp
 // 赋值运算符重载
 MyArray& operator=(const MyArray& other) {
+    if (this == &other) {
+        return *this;
+    }
+
     // 1. 先释放自己原有的堆区内存
     if (m_pAddress != nullptr) {
         delete[] m_pAddress;
@@ -380,6 +384,10 @@ public:
     MyArray& operator=(const MyArray& other) {
         cout << "MyArray operator= 调用" << endl;
 
+        if (this == &other) {
+            return *this;
+        }
+
         // 先释放原有内存
         if (m_pAddress != nullptr) {
             delete[] m_pAddress;
@@ -446,8 +454,7 @@ public:
 // =============================================
 // 打印 int 数组
 // =============================================
-void printIntArray(
-) {
+void printIntArray(MyArray<int>& arr) {
     for (int i = 0; i < arr.getSize(); i++) {
         cout << arr[i] << " ";
     }
@@ -677,4 +684,3 @@ T& operator[](int index) {
 ```
 
 ---
-

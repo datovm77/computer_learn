@@ -453,7 +453,7 @@ bool isEqual<const char*>(const char* a, const char* b) {
 
 int main() {
     cout << isEqual(10, 10) << endl;              // 1（使用通用模板）
-    cout << isEqual("hello", "hello") << endl;    // 0（指针比较，不相等）//实际是1
+    cout << isEqual("hello", "hello") << endl;    // 1（走 const char* 特化，按内容比较）
     
     const char* s1 = "hello";
     const char* s2 = "hello";
@@ -643,6 +643,7 @@ int main() {
 ```cpp
 #include <iostream>
 #include <string>
+#include <cstring>
 using namespace std;
 
 // 1. 基础函数模板
@@ -751,4 +752,3 @@ int main() {
 - 代码量很大且会被大量实例化（导致可执行文件膨胀）
 
 - 需要运行时多态（应该用虚函数）
-

@@ -161,7 +161,7 @@ BankAccount::setInterestRate(0.05);
 
 ```cpp
 class Student {
-    int age;
+    int age = 0;
     static int count;
     
 public:

@@ -105,8 +105,8 @@ int main() {
     displayStudent(stu);
     
     std::cout << "\n--- 普通对象可以调用所有函数 ---\n";
-    stu.printInfo();    // ✅ 普通对象可以调用常函数
     stu.setScore(95);   // ✅ 普通对象可以调用普通函数
+    stu.printInfo();    // ✅ 普通对象可以调用常函数
     
     return 0;
 }

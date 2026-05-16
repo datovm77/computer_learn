@@ -327,6 +327,7 @@ doSpeak(Animal& animal):
 我们可以通过 **指针操作直接窥探虚函数表**，用代码证明上面说的一切都是真实存在的：
 
 ```cpp
+#include <cstdint>
 #include <iostream>
 using namespace std;
 
@@ -342,7 +343,7 @@ public:
 };
 
 // 定义函数指针类型
-typedef void(*FUNC_PTR)();
+typedef void(*FUNC_PTR)(Animal*);
 
 int main() {
     Animal animal;
@@ -365,15 +366,15 @@ int main() {
     intptr_t* vftable_animal = (intptr_t*)*(intptr_t*)&animal;
     FUNC_PTR func0 = (FUNC_PTR)vftable_animal[0];
     FUNC_PTR func1 = (FUNC_PTR)vftable_animal[1];
-    func0(); // 输出：动物在叫
-    func1(); // 输出：动物在吃
+    func0(&animal); // 输出：动物在叫
+    func1(&animal); // 输出：动物在吃
 
     cout << "===== Cat 的虚函数表 =====" << endl;
     intptr_t* vftable_cat = (intptr_t*)*(intptr_t*)&cat;
     FUNC_PTR cfunc0 = (FUNC_PTR)vftable_cat[0];
     FUNC_PTR cfunc1 = (FUNC_PTR)vftable_cat[1];
-    cfunc0(); // 输出：喵喵喵  ← speak 被替换成了 Cat::speak
-    cfunc1(); // 输出：动物在吃 ← eat 没被重写，仍然是 Animal::eat
+    cfunc0(&cat); // 输出：喵喵喵  ← speak 被替换成了 Cat::speak
+    cfunc1(&cat); // 输出：动物在吃 ← eat 没被重写，仍然是 Animal::eat
 
     return 0;
 }

@@ -400,7 +400,7 @@ func(10);        // 自动推导
 func<double>(10); // 显式指定
 
 // 类模板
-template<typename T> class Wrapper { Wrapper(T x) {} };
+template<typename T> struct Wrapper { Wrapper(T x) {} };
 Wrapper w(10);        // 自动推导（C++17）
 Wrapper<double> w2(10); // 显式指定
 ```
@@ -421,7 +421,7 @@ template<typename T> T max(T a, T b) { return a > b ? a : b; }
 max(1, 2);  // 一直都可以
 
 // 类模板推导（C++17 起）
-template<typename T> class Box { Box(T x) {} };
+template<typename T> struct Box { Box(T x) {} };
 Box b(10);  // C++17 之前编译错误！
 ```
 
@@ -438,7 +438,7 @@ print(10);    // 这次调用推导 T=int
 print(3.14);  // 下次调用推导 T=double
 
 // 类模板：创建对象时推导一次
-template<typename T> class Container { Container(T x) {} };
+template<typename T> struct Container { Container(T x) {} };
 Container c(10);  // 创建时推导 T=int，之后 c 的类型固定
 ```
 
@@ -455,7 +455,7 @@ int x;
 func(&x);  // T=int，简单
 
 // 类模板：可能需要推导指引
-template<typename T> class Vec {
+template<typename T> struct Vec {
     template<typename Iter>
     Vec(Iter begin, Iter end) {}
 };
@@ -477,11 +477,11 @@ func(3.14); // T=double（推导覆盖默认）
 
 // 类模板
 template<typename T = int>
-class Box {
+struct Box {
     Box(T x = 0) {}
 };
 
-Box b1;      // 错误！C++17 CTAD 无法从无参构造函数推导
+Box b1;      // 正确，使用默认 T=int（C++17 起）
 Box<> b2;    // 正确，使用默认 T=int
 Box b3(10);  // 正确，推导 T=int
 ```
@@ -517,7 +517,7 @@ void func(T x) {}
 
 // 类模板：可以有推导指引
 template<typename T>
-class Container {
+struct Container {
     Container(T x) {}
 };
 
@@ -551,7 +551,7 @@ Container(T) -> Container<T>;  // 这是推导指引，函数模板没有这个
 template<typename T>
 class StrictWrapper {
 public:
-    StrictWrapper(T v) {}
+    explicit StrictWrapper(T v) {}
 };
 
 // 显式推导指引
@@ -568,7 +568,7 @@ StrictWrapper w2 = 10;      // 错误！explicit 禁止隐式转换
 
 ```cpp
 template<typename T>
-class MultiWrapper {
+struct MultiWrapper {
     MultiWrapper(T v) {}
     MultiWrapper(T* ptr) {}
 };
@@ -588,13 +588,13 @@ MultiWrapper w2(&x);  // T=int（指引2，不是int*）
 
 ### 4.3 CTAD 与别名模板
 
-别名模板（`using`）不支持 CTAD：
+C++17 中，别名模板（`using`）不支持 CTAD：
 
 ```cpp
 template<typename T>
 using Vec = std::vector<T>;
 
-// Vec v = {1, 2, 3};  // 错误！别名模板不支持 CTAD
+// Vec v = {1, 2, 3};  // C++17 错误！别名模板不支持 CTAD
 std::vector v = {1, 2, 3};  // 正确
 ```
 

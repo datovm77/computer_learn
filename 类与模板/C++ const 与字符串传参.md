@@ -45,7 +45,7 @@ void func(const std::string& s);  // ✅ 正确
 
 - `std::string&`（非 const 左值引用）**不能绑定到右值**。
 
-- `const std::string&` **可以绑定到右值**，并且会延长临时对象的生命周期。
+- `const std::string&` **可以绑定到右值**，函数参数会在本次调用期间保持临时对象有效。
 
 ```cpp
 class Person {
@@ -206,7 +206,7 @@ const std::string cs = "world";
 
 universal(s);       // T = string&,        param = string&
 universal(cs);      // T = const string&,  param = const string&
-universal("hi");    // T = const char[3],  param = const char (&&)[3]
+universal("hi");    // T = const char (&)[3],  param = const char (&)[3]
 ```
 
 万能引用会完美保留传入参数的 `const` 属性。如果你在函数内部试图修改 `param`，传入 `const` 对象时就会报错：
@@ -254,7 +254,7 @@ isEqual(std::string("hello"), "hello");
 **解决方案**：
 
 ```cpp
-// 方案1：至少一个参数用非推导上下文
+// 方案1：显式指定模板参数
 template<typename T>
 bool isEqual(const T& a, const T& b);
 
@@ -291,8 +291,12 @@ bool isEqual(const char* a, const char* b) {
 
 ```cpp
 // 现代写法（C++17）
+#include <string>
+#include <string_view>
+
 void process(std::string_view sv);  // 接受 const char*、string、string_view，零拷贝
 
+std::string_view sv = "world";
 process("hello");           // ✅ 
 process(std::string("hi")); // ✅
 process(sv);                // ✅

@@ -41,8 +41,25 @@ public:
     Person(const Person& p) {
         name = p.name;
         age = p.age;
-        ptr = new int(*p.ptr);  // 深拷贝
+        ptr = p.ptr ? new int(*p.ptr) : nullptr;  // 深拷贝
         cout << "拷贝构造函数被调用" << endl;
+    }
+
+    Person& operator=(const Person& p) {
+        if (this == &p) {
+            return *this;
+        }
+
+        int* newPtr = p.ptr ? new int(*p.ptr) : nullptr;
+        delete ptr;
+        name = p.name;
+        age = p.age;
+        ptr = newPtr;
+        return *this;
+    }
+
+    ~Person() {
+        delete ptr;
     }
 
     void display() {
@@ -253,13 +270,17 @@ del p1  # 可能调用 __del__，但不保证立即调用
 
 ```cpp
 class Person {
+private:
+    string name;
+    int age;
+
 public:
     Person() { }                        // 无参构造
     Person(string n) { name = n; }      // 单参数构造
     Person(string n, int a) {           // 双参数构造
         name = n; 
         age = a; 
-    }l
+    }
 };
 ```
 

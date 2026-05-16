@@ -101,9 +101,9 @@ private:
     int& ref;  // 引用必须在创建时绑定
     
 public:
-    // 错误示范
+    // 错误示范：引用成员必须先在初始化列表里绑定
     Wrapper(int& r) {
-        ref = r;  // 编译错误！引用不能重新绑定
+        ref = r;  // 编译错误！
     }
     
     // 正确做法
@@ -324,9 +324,19 @@ public:
     BestPractice(int v, string t, vector<int> n) 
         : value(v), text(t), numbers(n) {
     }
-    
+};
+```
+
+```cpp
+class AssignmentStyle {
+private:
+    int value;
+    string text;
+    vector<int> numbers;
+
+public:
     // 不推荐：在函数体内赋值
-    BestPractice(int v, string t, vector<int> n) {
+    AssignmentStyle(int v, string t, vector<int> n) {
         value = v;
         text = t;
         numbers = n;
@@ -344,9 +354,17 @@ private:
 public:
     // 好：初始化列表顺序与声明一致
     GoodOrder(int x) : a(x), b(x+1), c(x+2) {}
-    
+};
+```
+
+```cpp
+class BadOrder {
+private:
+    int a, b, c;  // 声明顺序
+
+public:
     // 不好：顺序不一致（虽然能编译，但容易出错）
-    GoodOrder(int x) : c(x+2), a(x), b(x+1) {}
+    BadOrder(int x) : c(x+2), a(x), b(x+1) {}
 };
 ```
 
@@ -357,11 +375,11 @@ public:
 ```cpp
 class Trap {
 private:
-    int b;
-    int a;  // 注意：a在b之后声明
+    int a;
+    int b;  // 注意：b在a之后声明
     
 public:
-    // 错误！a会先于b初始化（按声明顺序），但a依赖b
+    // 错误！a会先于b初始化（按声明顺序），但a依赖尚未初始化的b
     Trap(int x) : b(x), a(b + 1) {
         // a的值是未定义的！
     }
