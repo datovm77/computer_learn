@@ -101,14 +101,12 @@ class Container {
 public:
     // const 成员函数中，this 是 const Container*
     // 所以 data 也变成了 const string
-    std::string& getData() const {  // ❌ 返回 const string 的非 const 引用
-        return data;  // 编译错误！
-    }
+    // std::string& getData() const {  // ❌ 试图返回非常量引用，但成员已被 const 限定
+    //     return data;  // 编译错误！
+    // }
     
     // 正确做法：返回 const 引用
-    const std::string& getData() const {  // ✅
-        return data;
-    }
+    // const std::string& getData() const { return data; }  // ✅
     
     // 或者提供两个版本
     std::string& getData() { return data; }              // 非 const 对象调用

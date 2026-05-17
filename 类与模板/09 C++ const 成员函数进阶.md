@@ -700,10 +700,9 @@ class Mistake {
 private:
     int data;
 public:
-    // ❌ 危险：常函数返回非 const 引用
-    int& getData() const { return data; }
-    // 这会破坏 const 的语义！
-    // 现代 C++ 编译器可能会警告或报错
+    // ❌ 编译错误：常函数中不能返回非 mutable 成员的非 const 引用
+    // int& getData() const { return data; }
+    // 正确写法：const int& getData() const { return data; }
 };
 ```
 

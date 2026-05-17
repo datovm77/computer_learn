@@ -630,8 +630,8 @@ UniquePtr p2(new std::string("hi")); // UniquePtr<std::string>
 ```cpp
 template<typename T>
 class MyArray {
-    T* data;
     size_t size;
+    T* data;
     
 public:
     // 从初始化列表构造

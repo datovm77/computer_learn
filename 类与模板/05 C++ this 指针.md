@@ -99,7 +99,8 @@ public:
             cout << "比较的是同一个对象" << endl;
         }
     }
-    
+
+    // 伪代码：SomeManager 代表某个管理器类型
     void registerSelf(SomeManager& manager) {
         manager.addNode(this);  // 把当前对象注册到管理器
     }
@@ -183,14 +184,11 @@ public:
 ```cpp
 class Singleton {
 private:
-    static Singleton* instance;
     Singleton() {}  // 私有构造函数
     
 public:
-    static Singleton* getInstance() {
-        if (instance == nullptr) {
-            instance = new Singleton();
-        }
+    static Singleton& getInstance() {
+        static Singleton instance;
         return instance;  // 注意:这里不是 this
     }
     
@@ -199,8 +197,6 @@ public:
         cout << "实例地址: " << this << endl;
     }
 };
-
-Singleton* Singleton::instance = nullptr;
 ```
 
 ## 常见误区

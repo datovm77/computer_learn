@@ -150,7 +150,7 @@ std::sort(v.begin(), v.end(), [](int a, int b) {
 | 函数                | 特点                         | 复杂度      |
 | ------------------- | ---------------------------- | ----------- |
 | `std::sort`         | 不稳定排序                   | O(n log n)  |
-| `std::stable_sort`  | 稳定排序，相等元素保持原顺序 | O(n log² n) |
+| `std::stable_sort`  | 稳定排序，相等元素保持原顺序 | 通常 O(n log n)，内存不足时可能 O(n log² n) |
 | `std::partial_sort` | 只排序前 k 个元素            | O(n log k)  |
 | `std::nth_element`  | 只保证第 n 个位置元素正确    | O(n) 平均   |
 

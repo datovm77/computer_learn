@@ -153,7 +153,7 @@ MyArray(int capacity) {
 // 拷贝构造函数
 MyArray(const MyArray& other) {
     m_capacity = other.m_capacity; //当前的最大容量
-    m_size = other.m_size;         //当前的容量
+    m_size = other.m_size;         //当前的元素个数
 
     // 核心：重新在堆区申请一块全新的内存
     m_pAddress = new T[m_capacity];
@@ -286,6 +286,8 @@ void popBack() {
 > 2. 下次 `pushBack` 时会**覆盖**那个位置的旧数据
 >
 > 3. 用户通过 `operator[]` 和 `getSize()` 访问时，永远只能访问 `[0, m_size)` 范围，所以"逻辑删除"就够了
+>
+> 这是教学版简化实现；真正的 `std::vector::pop_back()` 会销毁最后一个元素对象。
 
 ---
 
@@ -614,11 +616,11 @@ error: no matching function for call to 'Person::Person()'
 
 所以 `Person` 类必须提供一个默认构造函数（哪怕是空的）。
 
-### 6.2 `operator=` 中没有处理自我赋值
+### 6.2 `operator=` 中要处理自我赋值
 
-如果有人写了 `arr = arr;`，当前的实现会**先把自己的内存释放掉，再从已被释放的自己身上拷贝** → 💥 未定义行为！
+当前完整实现已经有 `if (this == &other)`。如果去掉这层检查，有人写 `arr = arr;` 时，就可能**先把自己的内存释放掉，再从已被释放的自己身上拷贝** → 未定义行为！
 
-改进方案：加一个**自我赋值检查**：
+所以赋值运算符里要保留**自我赋值检查**：
 
 ```cpp
 MyArray& operator=(const MyArray& other) {
