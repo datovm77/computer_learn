@@ -1307,9 +1307,7 @@ data = new int* [n];
 // 再创建n列
 for (i = 0; i < n; i++)
 {
-
     data[i] = new int[n];
-
 }
 // 写入矩阵
 for (i = 0; i < n; i++)
