@@ -401,7 +401,15 @@ except Exception:               # 只捕获"普通异常"，不影响 Ctrl+C 退
     print("出错了")
 ```
 
-> **规则：** 用 `except Exception:` 兜底就足够了，几乎从来不需要写 `except BaseException:`。除非你确实知道自己在做什么（比如清理资源后再重新抛出）。
+> **规则：** 用 `except Exception:` 兜底就足够了，几乎从来不需要写 `except BaseException:`。除非你确实知道自己在做什么（比如清理资源后再重新抛出）。3
+>
+> .0
+>
+> +-
+>
+> +0...00.
+>
+> ****9**-///**
 
 #### 裸 except 也要避免
 
