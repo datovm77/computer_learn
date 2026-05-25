@@ -272,10 +272,10 @@ pwd
 | 特性             | WSL1                                       | WSL2                                        |
 | ---------------- | ------------------------------------------ | ------------------------------------------- |
 | **架构**         | 翻译层（把 Linux 调用翻译成 Windows 调用） | **完整的 Linux 内核**（运行在轻量虚拟机中） |
-| **兼容性**       | 部分 Linux 程序不兼容                      | 完全兼容（真正的 Linux 内核）               |
+| **兼容性**       | 部分 Linux 程序不兼容                      | 兼容性很高（真正的 Linux 内核）             |
 | **文件系统性能** | 访问 Windows 文件快                        | 访问 Linux 文件快，访问 Windows 文件稍慢    |
 | **内存占用**     | 较低                                       | 动态分配（起步约 300MB）                    |
-| **Docker 支持**  | ❌                                          | ✅ 完美支持                                  |
+| **Docker 支持**  | ❌                                          | ✅ 良好支持                                  |
 | **推荐**         | 已过时                                     | ✅ **强烈推荐**                              |
 
 > 💡 **WSL2 的本质**：它在 Windows 内部运行了一个极度精简的 Hyper-V 虚拟机，里面跑着一个真正的 Linux 内核。但它和传统虚拟机（VMware）不同的是，它启动极快（约 1-2 秒），内存动态分配，而且和 Windows 深度集成。
@@ -423,7 +423,7 @@ explorer.exe .
 | 操作场景                    | 推荐存放位置             | 原因                                    |
 | --------------------------- | ------------------------ | --------------------------------------- |
 | Linux 项目开发              | `/home/用户名/projects/` | Linux 原生文件系统性能最好              |
-| 需要 Windows 程序打开的文件 | `C:\Users\...`           | Windows 程序无法直接读取 Linux 文件系统 |
+| 需要 Windows 程序频繁打开的文件 | `C:\Users\...`           | 兼容性通常更好；也可通过 `\\wsl$` 访问 Linux 文件 |
 | Windows ↔ Linux 共享文件    | 按需复制                 | 避免跨文件系统操作的性能损失            |
 
 ---
@@ -570,8 +570,7 @@ processors=2
 # 限制 swap 大小
 swap=2GB
 
-# 关闭页面报告（减少磁盘占用）
-pageReporting=false
+# 较新 WSL 默认会自动回收空闲内存；一般不需要额外配置
 ```
 
 修改后需要运行 `wsl --shutdown` 重启 WSL 才能生效。
@@ -2871,12 +2870,12 @@ sudo service nginx restart    # 重启
 sudo service nginx reload     # 重新加载配置（不中断服务）
 ```
 
-> 💡 **WSL2 中的 service 命令**：WSL2 不使用 `systemd`（传统 Linux 的服务管理器），而是用 `service` 命令来管理服务。但较新版本的 WSL2 已支持 systemd，你可以在 `/etc/wsl.conf` 中启用：
+> 💡 **WSL2 中的服务管理**：较新的 WSL 和当前默认 Ubuntu 已支持 systemd，可以直接使用 `systemctl`。如果你的环境里 `systemctl` 不可用，仍可用 `service` 命令；也可以在 `/etc/wsl.conf` 中启用：
 > ```ini
 > [boot]
 > systemd=true
 > ```
-> 重启 WSL 后就可以使用 `systemctl` 命令了。
+> 运行 `wsl --shutdown` 重启 WSL 后，再用 `systemctl status` 验证。
 
 ### 6.4.3 实战二：安装 Python
 
@@ -2915,8 +2914,8 @@ deactivate                          # 退出虚拟环境
 ```bash
 # 方法一：使用 nvm（推荐！）
 
-# 1. 安装 nvm
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
+# 1. 安装 nvm（版本号可到 nvm 官方仓库确认最新 release）
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
 
 # 2. 重新加载 shell 配置
 source ~/.bashrc
@@ -4334,7 +4333,7 @@ fi
 
 read -p "请输入你的成绩: " score
 
-if ! [[ "$score" =~ ^[0-9]+$ ]]; then
+if ! [[ "$score" =~ ^[0-9]+$ ]] || (( 10#$score > 100 )); then
     echo "输入无效：请输入 0-100 的整数"
 elif [ "$score" -ge 90 ]; then
     echo "优秀！🏆"
@@ -4509,7 +4508,7 @@ done
 
 # 基本计数
 count=1
-while [ $count -le 5 ]; do
+while [ "$count" -le 5 ]; do
     echo "第 $count 次循环"
     count=$((count + 1))    # 数学运算用 $((...))
 done
@@ -4534,7 +4533,7 @@ done
 
 # break —— 跳出循环
 for i in {1..10}; do
-    if [ $i -eq 5 ]; then
+    if [ "$i" -eq 5 ]; then
         echo "到 5 了，退出循环"
         break
     fi
@@ -4568,7 +4567,7 @@ add() {
     local a=$1
     local b=$2
     local sum=$((a + b))
-    echo $sum                # 通过 echo 返回结果
+    echo "$sum"              # 通过 echo 返回结果
 }
 
 # 调用函数
@@ -4582,7 +4581,7 @@ echo "10 + 20 = $result"
 # 检查命令是否成功的函数
 check_command() {
     if command -v "$1" &> /dev/null; then
-        echo "✅ $1 已安装（$(command -v $1)）"
+        echo "✅ $1 已安装（$(command -v "$1")）"
         return 0
     else
         echo "❌ $1 未安装"
@@ -4654,11 +4653,8 @@ log "========== 开始备份 =========="
 log "源目录: $SOURCE_DIR"
 log "备份文件: $BACKUP_FILE"
 
-# 执行压缩备份
-tar -czf "$BACKUP_FILE" -C "$(dirname "$SOURCE_DIR")" "$DIR_NAME" 2>> "$LOG_FILE"
-
-# 检查备份是否成功
-if [ $? -eq 0 ]; then
+# 执行压缩备份并检查结果
+if tar -czf "$BACKUP_FILE" -C "$(dirname "$SOURCE_DIR")" "$DIR_NAME" 2>> "$LOG_FILE"; then
     FILE_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
     log "✅ 备份成功！文件大小: $FILE_SIZE"
 else
@@ -4673,14 +4669,14 @@ while IFS= read -r old_file; do
     rm -f "$old_file"
     log "  已删除: $(basename "$old_file")"
     deleted_count=$((deleted_count + 1))
-done < <(find "$BACKUP_DIR" -name "${DIR_NAME}_*.tar.gz" -mtime +$KEEP_DAYS)
+done < <(find "$BACKUP_DIR" -name "${DIR_NAME}_*.tar.gz" -mtime +"$KEEP_DAYS")
 
 log "已清理 $deleted_count 个过期备份"
 
 # 显示当前备份文件
 log "当前备份列表:"
-ls -lh "$BACKUP_DIR"/${DIR_NAME}_*.tar.gz 2>/dev/null | while read -r line; do
-    log "  $line"
+find "$BACKUP_DIR" -maxdepth 1 -type f -name "${DIR_NAME}_*.tar.gz" -print0 | sort -z | while IFS= read -r -d '' file; do
+    log "  $(ls -lh "$file")"
 done
 
 log "========== 备份完成 =========="
@@ -4820,7 +4816,7 @@ sudo service cron status
 
 ### 9.7.6 WSL 开机自启脚本
 
-WSL 不像传统 Linux 服务器那样有完整的开机流程，但可以通过 `/etc/wsl.conf` 配置启动命令：
+较新的 WSL 可以使用 systemd 管理服务；如果你的发行版尚未启用，可以通过 `/etc/wsl.conf` 配置：
 
 ```bash
 # 编辑 wsl.conf
@@ -5031,7 +5027,7 @@ python3 --version
 pip3 --version
 
 # ========== 4. 安装 Node.js（通过 nvm）==========
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
 source ~/.bashrc
 nvm install --lts
 
@@ -5192,7 +5188,8 @@ fi
 if [ $? -eq 0 ]; then
     log "✅ 同步完成！"
 else
-    log "⚠️  同步过程中出现警告，请检查日志"
+    log "❌ 同步失败，请检查日志"
+    exit 1
 fi
 
 # 更新 latest 符号链接（指向最新的备份快照）
@@ -5261,10 +5258,11 @@ sudo apt install rsync -y
 # 4. 添加执行权限
 chmod +x ~/sync_backup.sh
 
-# 5. 先创建一些 Windows 测试文件（从 WSL 中）
-mkdir -p /mnt/c/Users/$(whoami)/Documents/important_files
-echo "文件1内容" > /mnt/c/Users/$(whoami)/Documents/important_files/note1.txt
-echo "文件2内容" > /mnt/c/Users/$(whoami)/Documents/important_files/note2.txt
+# 5. 先创建一些 Windows 测试文件（从 WSL 中；把用户名改成你的 Windows 用户名）
+WIN_USER="你的Windows用户名"
+mkdir -p "/mnt/c/Users/$WIN_USER/Documents/important_files"
+echo "文件1内容" > "/mnt/c/Users/$WIN_USER/Documents/important_files/note1.txt"
+echo "文件2内容" > "/mnt/c/Users/$WIN_USER/Documents/important_files/note2.txt"
 
 # 6. 运行脚本
 ~/sync_backup.sh
@@ -5514,7 +5512,7 @@ bind: Address already in use
 当前位置 ──→ 以下方向任选
 
 ├── 🐳 Docker 容器化
-│     WSL2 完美支持 Docker，学习容器化部署
+│     WSL2 良好支持 Docker，学习容器化部署
 │
 ├── 🔐 SSH 与远程管理
 │     SSH 密钥认证、远程服务器管理、SCP/SFTP 文件传输
