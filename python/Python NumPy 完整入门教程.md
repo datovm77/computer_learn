@@ -204,10 +204,10 @@ print(arr.size)  # 输出: 12（3 × 4 = 12）
 print(arr.dtype)  # 输出: int64 或 int32（取决于系统）
 
 # itemsize：每个元素占用的字节数
-print(arr.itemsize)  # 输出: 8（int64 占 8 字节）
+print(arr.itemsize)  # 通常输出: 8（int64 占 8 字节；若为 int32 则是 4）
 
 # nbytes：数组占用的总字节数
-print(arr.nbytes)  # 输出: 96（12 个元素 × 8 字节）
+print(arr.nbytes)  # 通常输出: 96（12 个元素 × 8 字节；若为 int32 则是 48）
 ```
 
 **形状理解示例**：
@@ -312,7 +312,7 @@ print(arr_auto2.shape)  # 输出: (6, 2)
 ```
 
 **重要提示**：
-- `reshape` 返回的是数组的视图（view），不是复制
+- `reshape` 通常返回视图（view），但在内存布局不允许时可能返回副本
 - 元素总数必须保持不变（例如 12 个元素可以变成 3×4 或 2×6，但不能变成 3×5）
 
 ### 4.2 flatten 与 ravel：展平数组
@@ -331,7 +331,7 @@ print(arr)  # 原数组不变
 # [[1 2 3]
 #  [4 5 6]]
 
-# ravel：返回数组的视图（通常更快）
+# ravel：尽量返回数组的视图（通常更快）
 arr_ravel = arr.ravel()
 print(arr_ravel)  # 输出: [1 2 3 4 5 6]
 arr_ravel[0] = 999
@@ -343,7 +343,7 @@ print(arr)  # 原数组会改变！
 
 **flatten 与 ravel 的区别**：
 - `flatten()`：创建副本，修改不影响原数组
-- `ravel()`：创建视图，修改会影响原数组（性能更好）
+- `ravel()`：尽量创建视图，必要时才复制；如果返回视图，修改会影响原数组（性能更好）
 
 ### 4.3 转置：transpose 与 T
 
@@ -1229,13 +1229,13 @@ print(arr[-2])  # 输出: 80（倒数第二个元素）
 print(arr[2:5])   # 输出: [30 40 50]（索引2到4）
 print(arr[:5])    # 输出: [10 20 30 40 50]（从开始到索引4）
 print(arr[5:])    # 输出: [60 70 80 90]（从索引5到结束）
-print(arr[:])     # 输出: 整个数组（复制）
+print(arr[:])     # 输出: 整个数组（视图）
 
 # 带步长的切片
 print(arr[::2])   # 输出: [10 30 50 70 90]（每隔一个元素）
 print(arr[1::2])  # 输出: [20 40 60 80]（从索引1开始，每隔一个）
 print(arr[::-1])  # 输出: [90 80 70 60 50 40 30 20 10]（反转数组）
-print(arr[7:2:-1])  # 输出: [80 70 60 50 40 30]（从索引7到3，倒序）
+print(arr[7:2:-1])  # 输出: [80 70 60 50 40]（从索引7到3，倒序）
 
 # 修改元素
 arr[0] = 100
@@ -1630,7 +1630,7 @@ print(arr)  # 原数组不变
 
 ```python
 # 示例 1：数据清洗 - 替换异常值
-data = np.array([1, 2, 3, 100, 5, 6, -50, 8, 9, 10])
+data = np.array([1, 2, 3, 100, 5, 6, -50, 8, 9, 10], dtype=float)
 
 # 将小于0或大于50的值替换为中位数
 median = np.median(data[(data >= 0) & (data <= 50)])
@@ -1739,9 +1739,9 @@ for i in range(5):
     best_in_course = np.argmax(scores[:, i])
     print(f"第{i+1}门课程最高分: 第{best_in_course+1}名学生, {scores[best_in_course, i]}分")
 
-# 5. 统计每门课程的及格率
-pass_rates = np.mean(scores >= 80, axis=0) * 100
-for i, rate in enumerate(pass_rates):
+# 5. 统计每门课程的优秀率
+excellent_rates = np.mean(scores >= 80, axis=0) * 100
+for i, rate in enumerate(excellent_rates):
     print(f"第{i+1}门课程优秀率: {rate:.1f}%")
 ```
 
@@ -1831,10 +1831,10 @@ print(f"中位数: {np.median(measurements):.2f}")
 print(f"最小值: {np.min(measurements):.2f}")
 print(f"最大值: {np.max(measurements):.2f}")
 
-# 2. 计算置信区间（95%）
+# 2. 计算 95% 分位数区间
 lower = np.percentile(measurements, 2.5)
 upper = np.percentile(measurements, 97.5)
-print(f"95% 置信区间: [{lower:.2f}, {upper:.2f}]")
+print(f"95% 分位数区间: [{lower:.2f}, {upper:.2f}]")
 
 # 3. 去除异常值（超过3个标准差）
 mean = np.mean(measurements)
@@ -1938,8 +1938,8 @@ arr_int64 = np.arange(1000000)
 print(f"int64 内存占用: {arr_int64.nbytes / 1024 / 1024:.2f} MB")
 
 # 如果数据范围小，可以使用 int32 或 int16
-arr_int16 = np.arange(1000000, dtype=np.int16)
-print(f"int16 内存占用: {arr_int16.nbytes / 1024 / 1024:.2f} MB")
+arr_int32 = np.arange(1000000, dtype=np.int32)
+print(f"int32 内存占用: {arr_int32.nbytes / 1024 / 1024:.2f} MB")
 
 # 技巧 3：删除不需要的大数组
 large_arr = np.zeros((10000, 10000))
@@ -2126,6 +2126,7 @@ norm_data2 = normalize(data2)
 
 # 技巧 5：使用常量而不是魔法数字
 # 不好的写法
+score = 85
 if score >= 90:
     grade = 'A'
 
@@ -2176,7 +2177,7 @@ large_array = np.random.randn(100)
 print(large_array)  # 只显示前3个和后3个元素
 
 # 恢复默认设置
-np.set_printoptions()
+np.set_printoptions(precision=8, suppress=False, threshold=1000, edgeitems=3)
 
 # 技巧 3：检查形状兼容性
 def check_shape_compatibility(arr1, arr2, operation="operation"):
@@ -2343,7 +2344,7 @@ for temp in temperatures:
 
 print(f"\n最长连续高温天数: {max_consecutive} 天")
 
-# 6. 异常值检测（3σ原则）
+# 6. 异常值检测（2σ规则）
 mean = np.mean(temperatures)
 std = np.std(temperatures)
 outliers = temperatures[np.abs(temperatures - mean) > 2 * std]
@@ -2691,8 +2692,8 @@ print("\n一年后的年龄:")
 print(students['age'])
 
 # 添加计算字段（需要创建新数组）
-# 计算BMI（假设身高单位是cm，需要转换）
-bmi_data = students['height'] / 100  # 这里简化了BMI计算
+# 将身高从厘米转换为米
+height_m = students['height'] / 100
 
 # 创建更复杂的结构
 dt_extended = np.dtype([
@@ -2826,14 +2827,14 @@ print(rec_array[0])
 print("\nBob的身高:")
 print(rec_array[1].height)
 
-# 使用 recfromcsv 从 CSV 读取（模拟）
+# 使用 genfromtxt 从 CSV 读取（模拟）
 csv_data = """name,age,height
 Alice,20,165.5
 Bob,21,175.0
 Charlie,19,170.5"""
 
 # 实际应用中会从文件读取
-# rec_array = np.recfromcsv('data.csv')
+# rec_array = np.genfromtxt('data.csv', delimiter=',', names=True, dtype=None, encoding=None)
 ```
 
 ### 11.4 内存映射文件
@@ -2898,7 +2899,7 @@ print(date_range[:5])
 
 # 不同的时间单位
 # 'D' 天, 'h' 小时, 'm' 分钟, 's' 秒
-dates_hours = np.arange('2024-01-01T00', '2024-01-01T24', dtype='datetime64[h]')
+dates_hours = np.arange('2024-01-01T00', '2024-01-02T00', dtype='datetime64[h]')
 print(f"\n一天的小时数: {len(dates_hours)}")
 
 # 工作日计算
@@ -2939,9 +2940,8 @@ for month in unique_months[:6]:  # 只显示前6个月
     avg_temp = np.mean(temperatures[mask])
     print(f"{month}: {avg_temp:.1f}°C")
 
-# 按星期几统计
-weekdays = np.busday_offset(dates, 0).astype('datetime64[D]')  # 标准化到工作日
-is_weekend = np.is_busday(dates) == False
+# 按工作日/周末统计
+is_weekend = ~np.is_busday(dates)
 weekend_temps = temperatures[is_weekend]
 weekday_temps = temperatures[~is_weekend]
 
@@ -3133,7 +3133,7 @@ print(f"\nR² 分数: {r_squared:.4f}")
 # 生成信号：三个正弦波的叠加
 sample_rate = 1000  # 采样率 1000 Hz
 duration = 1.0      # 持续时间 1 秒
-t = np.linspace(0, duration, int(sample_rate * duration))
+t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
 
 # 信号：50Hz + 120Hz + 200Hz
 freq1, freq2, freq3 = 50, 120, 200
@@ -4045,7 +4045,7 @@ try:
   
     # 8. 直方图均衡化
     # 创建低对比度图像
-    low_contrast = np.random.normal(128, 20, (200, 300)).astype(np.uint8)
+    low_contrast = np.clip(np.random.normal(128, 20, (200, 300)), 0, 255).astype(np.uint8)
   
     # 均衡化
     equalized = cv2.equalizeHist(low_contrast)
