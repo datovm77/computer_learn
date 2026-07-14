@@ -1,14 +1,18 @@
-# C++ STL `<algorithm>` 常用算法：`vector` 与 `array` 实战
+# C++ STL `<algorithm>` 常用算法：`vector` 与 C 风格数组实战
 
 ---
 
-`<algorithm>` 的大多数算法只关心迭代器范围，不关心数据具体放在什么容器里。`std::vector` 和 `std::array` 都提供 `begin()`、`end()`，而且都支持随机访问迭代器，所以本页的算法可以用几乎相同的写法调用：
+`<algorithm>` 的大多数算法只关心迭代器范围，不关心数据具体放在什么容器里。`std::vector` 使用成员函数 `begin()`、`end()`；C 风格数组使用 `<iterator>` 中的 `std::begin(arr)`、`std::end(arr)`。两者都支持随机访问迭代器，所以调用形式很接近：
 
 ~~~cpp
-算法名(container.begin(), container.end(), 其他参数);
+std::vector<int> v = {3, 1, 2};
+int arr[] = {3, 1, 2};
+
+算法名(v.begin(), v.end(), 其他参数);
+算法名(std::begin(arr), std::end(arr), 其他参数);
 ~~~
 
-本文覆盖下列 20 个算法，并把重点放在四件事上：是否改写数据、返回什么、有哪些前提，以及 `vector` 与 `array` 的实际差异。
+本文覆盖下列 20 个算法，并把重点放在四件事上：是否改写数据、返回什么、有哪些前提，以及 `vector` 与 C 风格数组的实际差异。
 
 ~~~text
 sort              reverse           find              count
@@ -24,17 +28,20 @@ next_permutation  prev_permutation  rotate            accumulate
 
 ## 一、先统一三个概念
 
-### 1.1 `vector` 和 `array` 什么时候有区别？
+### 1.1 `vector` 和 C 风格数组什么时候有区别？
 
-| 项目 | `std::vector<T>` | `std::array<T, N>` |
+| 项目 | `std::vector<T>` | C 风格数组，例如 `int arr[]` |
 | --- | --- | --- |
-| 元素个数 | 运行时可增减 | 固定为 `N`，不能增减 |
+| 元素个数 | 运行时可增减 | 定义后固定，不能增减 |
 | 内存布局 | 连续 | 连续 |
-| `begin() + n` | 支持 | 支持 |
+| 算法范围 | `v.begin()`、`v.end()` | `std::begin(arr)`、`std::end(arr)` |
+| 前进 n 个位置 | `v.begin() + n` | `std::begin(arr) + n` |
 | 典型场景 | 待处理记录、动态列表 | 固定数量的数据，例如一周 7 天 |
 | `remove` / `unique` 后 | 可调用 `erase` 真正删除尾部元素 | 不能缩短，只能使用新的有效范围 |
 
-因此，排序、查找、统计、填充等算法对两者的调用方式相同；真正需要分开理解的是“长度是否可以变化”。
+因此，排序、查找、统计、填充等算法的思路相同；真正需要分开理解的是范围的写法，以及长度是否可以变化。
+
+> **补充**：标准 C++ 不能用 `int arr[] = {};` 定义零长度的 C 风格数组。若要创建 7 个零初始化元素，可以写 `int arr[7] = {};`；若数据可能为空或长度会变，使用 `vector` 更合适。
 
 ### 1.2 区间 `[first, last)`
 
@@ -48,13 +55,13 @@ std::sort(values.begin() + 1, values.begin() + 4);
 // values = {10, 20, 30, 40, 50}
 ~~~
 
-`[it, it)` 是合法的空区间。`vector` 和 `array` 支持 `begin() + n`，但 `n` 必须让位置保持在 `[begin(), end()]` 内。
+`[it, it)` 是合法的空区间。`vector` 使用 `v.begin() + n`，C 风格数组使用 `std::begin(arr) + n`；两者都要保证位置仍在自己的 `[begin, end]` 范围内。
 
 ### 1.3 常用头文件和打印函数
 
 ~~~cpp
 #include <algorithm>
-#include <array>
+#include <cstddef>
 #include <functional>
 #include <iostream>
 #include <iterator>
@@ -71,6 +78,30 @@ void print(const Container& values) {
 }
 ~~~
 
+这个 `print` 函数既能接收 `vector`，也能接收 `int arr[]`。范围 `for` 可以直接遍历仍保持数组类型的 C 风格数组。
+
+### 1.4 C 风格数组传参时的限制
+
+数组作为普通函数参数传入时会退化为指针，因此不能在函数体中再用 `std::end(arr)` 取得数组末尾：
+
+~~~cpp
+void bad(int arr[]) {
+    // 这里的 arr 实际上是 int*，不是完整数组。
+    // std::sort(std::begin(arr), std::end(arr));  // 不可用
+}
+~~~
+
+若函数需要保留数组长度，应按引用接收：
+
+~~~cpp
+template <std::size_t N>
+void sortArray(int (&arr)[N]) {
+    std::sort(std::begin(arr), std::end(arr));
+}
+~~~
+
+本页的 C 风格数组示例都在数组仍是完整数组类型的作用域中，因此可以安全使用 `std::begin` 和 `std::end`。
+
 ---
 
 ## 二、调整顺序：`sort`、`reverse`、`rotate`
@@ -85,13 +116,13 @@ std::sort(scores.begin(), scores.end());
 print(scores);
 // 60 75 75 88 92
 
-std::array<int, 5> priority = {3, 1, 5, 2, 4};
-std::sort(priority.begin(), priority.end(), std::greater<int>());
+int priority[] = {3, 1, 5, 2, 4};
+std::sort(std::begin(priority), std::end(priority), std::greater<int>());
 print(priority);
 // 5 4 3 2 1
 ~~~
 
-`sort` 需要随机访问迭代器，`vector` 和 `array` 都满足。比较器表达的是“左侧元素是否应排在右侧元素之前”，必须满足严格弱序；不要写成 `<=` 或 `>=`。
+`sort` 需要随机访问迭代器，`vector` 和 C 风格数组都满足。比较器表达的是“左侧元素是否应排在右侧元素之前”，必须满足严格弱序；不要写成 `<=` 或 `>=`。
 
 ~~~cpp
 std::vector<std::string> names = {"Tom", "Alice", "Bob"};
@@ -113,8 +144,8 @@ std::sort(names.begin(), names.end(),
 `reverse` 不排序，只把已有顺序反过来。
 
 ~~~cpp
-std::array<int, 5> route = {1, 2, 3, 4, 5};
-std::reverse(route.begin(), route.end());
+int route[] = {1, 2, 3, 4, 5};
+std::reverse(std::begin(route), std::end(route));
 print(route);
 // 5 4 3 2 1
 
@@ -135,9 +166,10 @@ std::rotate(first, middle, last);
 调用后，`[first, middle)` 会移到末尾，`[middle, last)` 会接到前面；后半段非空时，`middle` 成为新范围的第一个元素。两段内部的相对顺序保持不变。
 
 ~~~cpp
-std::array<int, 5> order = {1, 2, 3, 4, 5};
+int order[] = {1, 2, 3, 4, 5};
 
-auto oldFirst = std::rotate(order.begin(), order.begin() + 2, order.end());
+auto oldFirst = std::rotate(
+    std::begin(order), std::begin(order) + 2, std::end(order));
 print(order);
 // 3 4 5 1 2
 
@@ -168,8 +200,8 @@ if (pos != ids.end()) {
 `count` 会扫描完整个范围并返回数量。
 
 ~~~cpp
-std::array<int, 8> dice = {6, 1, 6, 2, 6, 3, 4, 6};
-auto sixCount = std::count(dice.begin(), dice.end(), 6);
+int dice[] = {6, 1, 6, 2, 6, 3, 4, 6};
+auto sixCount = std::count(std::begin(dice), std::end(dice), 6);
 std::cout << sixCount << '\n';
 // 4
 ~~~
@@ -201,10 +233,11 @@ if (minIt != scores.end()) {
 需要同时找最小和最大值时，可直接调用一次：
 
 ~~~cpp
-std::array<int, 6> temperatures = {26, 31, 28, 24, 33, 33};
-auto result = std::minmax_element(temperatures.begin(), temperatures.end());
+int temperatures[] = {26, 31, 28, 24, 33, 33};
+auto result = std::minmax_element(
+    std::begin(temperatures), std::end(temperatures));
 
-if (result.first != temperatures.end()) {
+if (result.first != std::end(temperatures)) {
     std::cout << "最低温：" << *result.first << '\n';
     std::cout << "最高温：" << *result.second << '\n';
 }
@@ -248,12 +281,12 @@ sorted.insert(insertPos, 25);
 // {10, 20, 20, 25, 30}
 ~~~
 
-`array` 同样可以查询位置，但长度固定，不能插入新元素。
+C 风格数组同样可以查询位置，但长度固定，不能插入新元素。
 
 ~~~cpp
-std::array<int, 5> fixed = {10, 20, 30, 40, 50};
-auto pos = std::lower_bound(fixed.begin(), fixed.end(), 35);
-std::cout << std::distance(fixed.begin(), pos) << '\n';
+int fixed[] = {10, 20, 30, 40, 50};
+auto pos = std::lower_bound(std::begin(fixed), std::end(fixed), 35);
+std::cout << std::distance(std::begin(fixed), pos) << '\n';
 // 3
 ~~~
 
@@ -270,7 +303,7 @@ auto firstAtMost30 = std::lower_bound(
     values.begin(), values.end(), 30, std::greater<int>());
 ~~~
 
-降序时，`lower_bound` 的含义由比较器决定，不能再套用“第一个大于等于”的默认升序说法。对 `vector` 和 `array`，这组查询通常只需对数级比较。
+降序时，`lower_bound` 的含义由比较器决定，不能再套用“第一个大于等于”的默认升序说法。对 `vector` 和 C 风格数组，这组查询通常只需对数级比较。
 
 ---
 
@@ -282,12 +315,14 @@ auto firstAtMost30 = std::lower_bound(
 
 ~~~cpp
 std::vector<int> source = {10, 20, 30, 40, 50};
-std::array<int, 5> backup = {};
+int backup[5] = {};
 
-std::copy(source.begin(), source.end(), backup.begin());
+std::copy(source.begin(), source.end(), std::begin(backup));
 print(backup);
 // 10 20 30 40 50
 ~~~
+
+这里的 `backup` 必须显式给出长度。C 风格数组不支持整体赋值，例如 `backup = source;` 不能编译；需要复制元素时，使用 `std::copy`。
 
 空的 `vector` 没有可写元素，使用 `back_inserter` 让 `copy` 自动追加：
 
@@ -305,9 +340,9 @@ print(copied);
 `fill` 为已有范围的每个元素赋同一个值，不会扩容。
 
 ~~~cpp
-std::array<int, 7> attendance = {};
-std::fill(attendance.begin(), attendance.end(), -1);
-std::fill(attendance.begin() + 5, attendance.end(), 0);
+int attendance[7] = {};
+std::fill(std::begin(attendance), std::end(attendance), -1);
+std::fill(std::begin(attendance) + 5, std::end(attendance), 0);
 print(attendance);
 // -1 -1 -1 -1 -1 0 0
 
@@ -343,12 +378,12 @@ std::transform(scores.begin(), scores.end(), scores.begin(),
 二元版本可合并两个等长序列：
 
 ~~~cpp
-std::array<int, 3> midterm = {80, 90, 70};
-std::array<int, 3> finalExam = {85, 88, 95};
-std::array<int, 3> total = {};
+int midterm[] = {80, 90, 70};
+int finalExam[] = {85, 88, 95};
+int total[3] = {};
 
-std::transform(midterm.begin(), midterm.end(),
-               finalExam.begin(), total.begin(),
+std::transform(std::begin(midterm), std::end(midterm),
+               std::begin(finalExam), std::begin(total),
                [](int left, int right) {
                    return left + right;
                });
@@ -362,9 +397,9 @@ std::transform(midterm.begin(), midterm.end(),
 仅读取元素时可按值传参，也可使用 `const T&` 避免复制；需要修改原元素时使用 `T&`。
 
 ~~~cpp
-std::array<int, 4> coupons = {10, 20, 30, 40};
+int coupons[] = {10, 20, 30, 40};
 
-std::for_each(coupons.begin(), coupons.end(), [](int& value) {
+std::for_each(std::begin(coupons), std::end(coupons), [](int& value) {
     value += 5;
 });
 print(coupons);
@@ -398,23 +433,23 @@ print(values);
 values.erase(std::remove(values.begin(), values.end(), 0), values.end());
 ~~~
 
-`array` 不能缩短，只能使用 `[begin(), newEnd)`：
+C 风格数组不能缩短，只能使用 `[std::begin(arr), newEnd)`：
 
 ~~~cpp
-std::array<int, 6> fixed = {1, 0, 2, 0, 3, 0};
-auto newEnd = std::remove(fixed.begin(), fixed.end(), 0);
+int fixed[] = {1, 0, 2, 0, 3, 0};
+auto newEnd = std::remove(std::begin(fixed), std::end(fixed), 0);
 
-for (auto it = fixed.begin(); it != newEnd; ++it) {
+for (auto it = std::begin(fixed); it != newEnd; ++it) {
     std::cout << *it << ' ';
 }
 std::cout << '\n';
 // 1 2 3
 ~~~
 
-`newEnd` 之后的元素仍然可以解引用，但值处于未指定状态，不能当作删除后的结果。若 `array` 需要一个真正变短的结果，可以构造新的 `vector`：
+`newEnd` 之后的元素仍然可以解引用，但值处于未指定状态，不能当作删除后的结果。若 C 风格数组需要一个真正变短的结果，可以构造新的 `vector`：
 
 ~~~cpp
-std::vector<int> kept(fixed.begin(), newEnd);
+std::vector<int> kept(std::begin(fixed), newEnd);
 ~~~
 
 ### 6.2 `std::unique`
@@ -430,13 +465,13 @@ print(values);
 // 1 2 3 1
 ~~~
 
-对 `array`，同样只使用新的有效前缀：
+对 C 风格数组，同样只使用新的有效前缀：
 
 ~~~cpp
-std::array<int, 6> fixed = {1, 1, 2, 2, 3, 3};
-auto uniqueEnd = std::unique(fixed.begin(), fixed.end());
+int fixed[] = {1, 1, 2, 2, 3, 3};
+auto uniqueEnd = std::unique(std::begin(fixed), std::end(fixed));
 
-for (auto it = fixed.begin(); it != uniqueEnd; ++it) {
+for (auto it = std::begin(fixed); it != uniqueEnd; ++it) {
     std::cout << *it << ' ';
 }
 std::cout << '\n';
@@ -456,7 +491,7 @@ print(ids);
 
 这套写法会改变原有顺序。需要保留首次出现顺序时，不能直接这样处理。
 
-和 `remove` 一样，`unique` 返回的 `newEnd` 之后也只是有效但值未指定的区域。对 `array`，只能把 `[begin(), newEnd)` 当作去重后的结果。
+和 `remove` 一样，`unique` 返回的 `newEnd` 之后也只是有效但值未指定的区域。对 C 风格数组，只能把 `[std::begin(arr), newEnd)` 当作去重后的结果。
 
 ---
 
@@ -465,9 +500,9 @@ print(ids);
 ### 7.1 `std::next_permutation`
 
 ~~~cpp
-std::array<int, 3> order = {1, 2, 3};
+int order[] = {1, 2, 3};
 
-bool hasNext = std::next_permutation(order.begin(), order.end());
+bool hasNext = std::next_permutation(std::begin(order), std::end(order));
 print(order);
 std::cout << std::boolalpha << hasNext << '\n';
 // 1 3 2
@@ -490,9 +525,9 @@ do {
 ### 7.2 `std::prev_permutation`
 
 ~~~cpp
-std::array<int, 3> order = {3, 2, 1};
+int order[] = {3, 2, 1};
 
-bool hasPrev = std::prev_permutation(order.begin(), order.end());
+bool hasPrev = std::prev_permutation(std::begin(order), std::end(order));
 print(order);
 // 3 1 2
 ~~~
@@ -515,9 +550,9 @@ double average = scores.empty()
 初值决定累积过程的类型。即使最后用 `long long` 接收结果，初值写成 `0` 时仍可能先按 `int` 溢出；需要宽类型时使用 `0LL`。
 
 ~~~cpp
-std::array<int, 4> factors = {2, 3, 4, 5};
+int factors[] = {2, 3, 4, 5};
 
-int product = std::accumulate(factors.begin(), factors.end(), 1,
+int product = std::accumulate(std::begin(factors), std::end(factors), 1,
                               std::multiplies<int>());
 std::cout << product << '\n';
 // 120
@@ -532,6 +567,7 @@ std::cout << product << '\n';
 ~~~cpp
 #include <algorithm>
 #include <iostream>
+#include <iterator>
 #include <numeric>
 #include <vector>
 
@@ -570,10 +606,28 @@ int main() {
         std::cout << "最小编号：" << *range.first
                   << "，最大编号：" << *range.second << '\n';
     }
+
+    // 5. C 风格数组也可直接交给算法，范围写为 std::begin / std::end。
+    int steps[] = {6800, 4200, 9100, 7300, 5500, 10000, 6100};
+    std::sort(std::begin(steps), std::end(steps));
+
+    auto firstAtLeast7000 = std::lower_bound(
+        std::begin(steps), std::end(steps), 7000);
+    auto stepRange = std::minmax_element(std::begin(steps), std::end(steps));
+    long long stepTotal = std::accumulate(
+        std::begin(steps), std::end(steps), 0LL);
+
+    std::cout << "步数总和：" << stepTotal << '\n';
+    std::cout << "最低步数：" << *stepRange.first
+              << "，最高步数：" << *stepRange.second << '\n';
+    if (firstAtLeast7000 != std::end(steps)) {
+        std::cout << "第一个不少于 7000 的步数："
+                  << *firstAtLeast7000 << '\n';
+    }
 }
 ~~~
 
-这里的排序既为去重服务，也为二分查询提供前提。若业务需要保留录入顺序，应使用其他去重策略，而不是直接排序。
+这里的 `vector` 部分展示了“删除、去重、查询”的常见流程；C 风格数组部分展示了同一批算法如何通过 `std::begin`、`std::end` 使用。排序既为去重服务，也为二分查询提供前提。若业务需要保留录入顺序，应使用其他去重策略，而不是直接排序。
 
 ---
 
@@ -592,7 +646,7 @@ int main() {
 | `fill` | 是 | `void` | 只写已有范围，不扩容 |
 | `transform` | 源范围通常不变；目标范围会写入 | 目标尾后迭代器 | 目标范围要可写；二元版本要保证第二个输入足够长 |
 | `for_each` | 取决于函数参数 | 函数对象 | 用 `T&` 才能改写元素 |
-| `remove` | 会整理元素 | 新逻辑结尾 | `vector` 需接 `erase`；`array` 只能使用有效前缀 |
+| `remove` | 会整理元素 | 新逻辑结尾 | `vector` 需接 `erase`；C 风格数组只能使用有效前缀 |
 | `unique` | 会整理元素 | 新逻辑结尾 | 只处理相邻重复项 |
 | `binary_search` | 否 | `bool` | 范围须按同一比较规则有序 |
 | `lower_bound` | 否 | 迭代器 | 默认升序时为第一个 `>= target` |
@@ -606,10 +660,10 @@ int main() {
 
 ## 十、练习建议
 
-1. 用 `std::array<int, 7>` 保存一周步数，分别求最大值、最小值和平均值。
+1. 用 `int steps[7] = { ... };` 保存一周步数，分别求最大值、最小值和平均值。
 2. 用 `std::vector<int>` 保存待处理编号，删除 `-1`，排序去重，再用 `lower_bound` 查询插入位置。
 3. 对一组已排序的成绩，使用 `lower_bound` 和 `upper_bound` 统计某个分数出现的次数。
 4. 用 `next_permutation` 输出 `{1, 2, 3}` 的全部排列。
-5. 分别对 `vector` 与 `array` 使用 `remove`，观察“容器长度是否变化”和“有效范围”的差别。
+5. 分别对 `vector` 与 `int arr[]` 使用 `remove`，观察“长度是否变化”和“有效范围”的差别。
 
 实际写代码时，先确认三件事：数据是否有序、算法会不会改写元素、结果是迭代器还是数值。把这三点判断清楚后，这些算法就可以稳定地组合使用。
