@@ -1,5 +1,3 @@
-The user wants a detailed tutorial on the five `<algorithm>` functions: `std::for_each`, `std::copy`, `std::find`, `std::sort`, and `std::swap`. I'll write a comprehensive tutorial from shallow to deep, in Chinese.
-
 # `<algorithm>` 核心五算法 完全教程
 
 ---
@@ -65,8 +63,7 @@ int main() {
 ```cpp
 std::vector<int> v = {1, 2, 3, 4, 5};
 
-// 遍历打印
-std::for_each(v.begin(), v.end(), [](<int x>) {
+std::for_each(v.begin(), v.end(), [](auto x) {
     std::cout << x << " ";
 });
 
@@ -92,7 +89,7 @@ std::vector<int> v = {1, 2, 3, 4, 5};
 int sum = 0;
 
 // [&sum] 表示"捕获外部变量 sum 的引用"
-std::for_each(v.begin(), v.end(), [&sum](<int x>) {
+std::for_each(v.begin(), v.end(), [&sum](int x) {
     sum += x;
 });
 

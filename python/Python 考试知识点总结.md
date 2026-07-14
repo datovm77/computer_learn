@@ -103,6 +103,7 @@ x = a if 条件 else b
 
 # 链式比较
 if 1 < x < 10:  # 等价于 1 < x and x < 10
+    ...
 
 # match/case（3.10+）
 match value:
@@ -131,7 +132,10 @@ pass      # 占位符
 # 常用搭配
 enumerate(iter, start=0)   # 同时获取索引和值
 zip(*iters)                # 并行遍历，以最短为准；3.10+ strict=True
-for...else                 # 循环未被 break 中断时执行 else
+for item in iterable:
+    ...
+else:                      # 循环未被 break 中断时执行
+    ...
 ```
 
 ---
@@ -197,7 +201,7 @@ for...else                 # 循环未被 break 中断时执行 else
 
 - 创建：`{1,2,3}` 或 `set()`；**`{}` 是空字典**
 - 元素必须可哈希；`True==1==1.0` 视为同一元素
-- 操作：`add()`、`remove()`（报错）、`discard()`（不报错）、`pop()`（随机）
+- 操作：`add()`、`remove()`（报错）、`discard()`（不报错）、`pop()`（弹出任意元素，不保证顺序）
 
 **集合运算**：`|` 并集、`&` 交集、`-` 差集、`^` 对称差、`<=` 子集、`>=` 超集
 
@@ -256,13 +260,13 @@ for...else                 # 循环未被 break 中断时执行 else
 | `\\` | 反斜杠 |
 | `\'` `\"` | 引号 |
 
-原始字符串 `r"..."` 不转义反斜杠（正则中必须用）。限制：不能以单反斜杠结尾。
+原始字符串 `r"..."` 不转义反斜杠（正则中推荐用）。限制：不能以单反斜杠结尾。
 
 ### 3.2 编码
 
 - `ord(c)` → Unicode 码点；`chr(n)` → 字符
 - `s.encode("utf-8")` → bytes；`b.decode("utf-8")` → str
-- Python 3 源码默认 UTF-8；中文在 UTF-8 中占 3 字节
+- Python 3 源码默认 UTF-8；常用中文汉字通常占 3 字节，部分字符如 emoji 占 4 字节
 - `len(s)` 对 str 计字符数，对 bytes 计字节数
 
 ### 3.3 正则表达式（`re` 模块）
@@ -356,6 +360,8 @@ lambda 参数: 表达式  # 只能一个表达式，不能多语句
 ### 4.8 装饰器
 
 ```python
+import functools
+
 def decorator(func):
     @functools.wraps(func)  # 保留原函数元信息
     def wrapper(*args, **kwargs):
@@ -375,6 +381,8 @@ def decorator(func):
 ### 4.10 map / filter / reduce
 
 ```python
+from functools import reduce
+
 map(func, iter)       # 变换，返回迭代器
 filter(func, iter)    # 过滤；filter(None, data) 过滤假值
 reduce(func, iter, initial)  # 归约（from functools）
@@ -412,8 +420,10 @@ y: str | None = None       # Optional（3.10+）
 
 - 类型注解**不影响运行时**，是给 IDE 和 mypy 看的
 - `bool` 是 `int` 子类，类型窄化时先检查 `bool` 再 `int`
+- `Optional[X]` 等价于 `X | None`，不是"参数可选"的意思
 - 类内部引用自身用字符串 `-> "ClassName"`
-- 泛型：`T = TypeVar("T")` → `def first(items: list[T]) -> T`
+- 泛型：`from typing import TypeVar; T = TypeVar("T")` → `def first(items: list[T]) -> T`
+- 常见补充：`Any` 表示任意类型，`Callable` 标注函数参数，`Literal` 限定固定取值
 
 ---
 
@@ -474,7 +484,7 @@ class BankAccount:
 ```python
 class Dog(Animal):                  # 单继承
     def __init__(self, name, breed):
-        super().__init__(name)      # 必须调用父类构造！
+        super().__init__(name)      # 通常先初始化父类部分
         self.breed = breed
 
     def speak(self):                # 复写（Override）
@@ -483,7 +493,7 @@ class Dog(Animal):                  # 单继承
 ```
 
 **核心规则**：
-- 子类 `__init__` 忘记 `super().__init__()` → 父类属性未初始化 → AttributeError
+- 子类 `__init__` 忘记 `super().__init__()` → 父类属性可能未初始化 → AttributeError
 - 子类**不能**直接访问父类 `__私有` 成员
 - `super()` 按 **MRO** 顺序查找下一个类（不是简单=父类）
 - `object` 是所有类的最终祖先
@@ -531,7 +541,7 @@ from dataclasses import dataclass, field
 class Student:
     name: str
     age: int
-    scores: list = field(default_factory=list)  # 可变默认值必须用 default_factory
+    scores: list[int] = field(default_factory=list)  # 可变默认值必须用 default_factory
 ```
 
 自动生成 `__init__`、`__repr__`、`__eq__`。
@@ -545,14 +555,19 @@ class Student:
 ```python
 try:
     # 可能出错的代码
+    ...
 except ValueError as e:
     # 处理 ValueError
+    ...
 except (TypeError, KeyError) as e:
     # 合并处理多种
+    ...
 else:
     # 没出错才执行
+    ...
 finally:
     # 无论如何都执行（return 之前）
+    ...
 ```
 
 ### 7.2 核心规则
@@ -607,6 +622,7 @@ assert 条件, "消息"     # 条件为 False 抛 AssertionError
 - 包装底层异常用 `from e`
 - 不静默吞错，至少 `logging.exception()`
 - EAFP（直接干，出错再说）比 LBYL（先检查再操作）更 Pythonic
+- Python 3.11+ 的 `ExceptionGroup` / `except*` 用于一次处理多个异常
 
 ---
 
@@ -626,6 +642,8 @@ with open("out.txt", "w", encoding="utf-8") as f:
     f.write("内容\n")
     # f.writelines(lines)        # 不会自动加换行
 ```
+
+文件指针：`f.tell()` 返回当前位置标记；`f.seek(0)` 回到文件开头。
 
 ### 8.2 打开模式
 
@@ -648,14 +666,20 @@ p.name        # 文件名（含扩展名）
 p.stem        # 文件名（不含扩展名）
 p.suffix      # 扩展名
 p.parent      # 父目录
-p.exists() / p.is_file() / p.is_dir()
-p.read_text(encoding="utf-8") / p.write_text("内容")
+p.exists()
+p.is_file()
+p.is_dir()
+p.read_text(encoding="utf-8")
+p.write_text("内容", encoding="utf-8")
+p.read_bytes()
+p.write_bytes(b"data")
 p.mkdir(parents=True, exist_ok=True)
+p.iterdir()            # 不递归遍历
 p.glob("*.py")       # 不递归匹配
 p.rglob("*.py")      # 递归匹配（杀手级功能）
 ```
 
-**os.path（传统）**：`os.path.join()`、`os.path.exists()`、`os.listdir()`、`os.makedirs()`
+**os.path（传统）**：`os.path.join()`、`os.path.exists()`、`os.listdir()`、`os.makedirs()`、`os.walk()`
 
 ### 8.4 bytes 与编码
 
@@ -669,8 +693,8 @@ ord("中")   # 20013
 chr(20013)  # '中'
 ```
 
-- UTF-8 变长编码：英文 1 字节，中文 3 字节
-- 始终显式指定 `encoding="utf-8"`
+- UTF-8 变长编码：英文 1 字节，常用中文汉字通常 3 字节，部分字符如 emoji 占 4 字节
+- 文本文件尽量显式指定 `encoding=`，并按文件真实编码选择
 
 ### 8.5 大文件处理
 
@@ -684,6 +708,8 @@ with open("large.bin", "rb") as f_in, open("copy.bin", "wb") as f_out:
 ### 8.6 shutil 常用操作
 
 ```python
+import shutil
+
 shutil.copy(src, dst)       # 复制文件
 shutil.copy2(src, dst)      # 复制+元数据
 shutil.copytree(src, dst)   # 递归复制目录
@@ -759,12 +785,13 @@ p.join()
 # 进程池
 with multiprocessing.Pool(processes=4) as pool:
     results = pool.map(func, iterable)       # 阻塞，按序
-    results = pool.map_async(func, iterable) # 异步
+    async_result = pool.map_async(func, iterable) # 异步，返回 AsyncResult
+    results = async_result.get()
     results = pool.starmap(func, [(a,b), ...])  # 多参数
     results = pool.imap(func, iterable)      # 惰性迭代器
 ```
 
-**重要**：多进程代码必须放在 `if __name__ == '__main__':` 内
+**重要**：跨平台多进程代码应放在 `if __name__ == '__main__':` 内，Windows/macOS 的 spawn 模式尤其需要。
 
 ### 9.5 进程间通信（IPC）
 
@@ -816,6 +843,8 @@ client, addr = sock.accept()  # 阻塞等待
 | 边界 | 字节流（粘包） | 数据报（天然边界） |
 | 场景 | 文件/HTTP | 视频/游戏/DNS |
 
+UDP 常用：`sock.sendto(data, (host, port))`；`data, addr = sock.recvfrom(4096)`。
+
 ### 10.3 粘包问题
 
 TCP 字节流无消息边界，需设计长度前缀协议：4 字节长度 + 数据体
@@ -826,6 +855,8 @@ struct.pack('!I', len(data))    # 打包长度（网络字节序）
 struct.unpack('!I', header)[0]  # 解包长度
 ```
 
+注意：`recv(n)` 不保证一次收满 n 字节，协议实现中应循环接收直到长度足够。
+
 ### 10.4 IO 多路复用
 
 ```python
@@ -835,7 +866,7 @@ sel.register(sock, selectors.EVENT_READ, data=callback)
 events = sel.select(timeout)  # 返回可读/可写的 socket 列表
 ```
 
-`selectors` 自动选择平台最优实现（Linux=epoll, macOS=kqueue），支持上万并发。
+`selectors` 自动选择平台较优实现（Linux=epoll, macOS=kqueue），适合大量并发连接。
 
 ### 10.5 日志系统
 
@@ -844,7 +875,7 @@ import logging
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-logger.exception("消息")  # 带完整堆栈
+logger.exception("消息")  # 在 except 块内使用，带完整堆栈
 ```
 
 ---
@@ -890,8 +921,10 @@ arr.squeeze()                   # 删除长度为1的维度
 
 ```python
 np.concatenate([a, b], axis=0)  # 沿指定轴拼接
-np.vstack([a, b]) / np.hstack([a, b])  # 垂直/水平堆叠
-np.vsplit(arr, n) / np.hsplit(arr, n)  # 分割
+np.vstack([a, b])               # 垂直堆叠
+np.hstack([a, b])               # 水平堆叠
+np.vsplit(arr, n)               # 垂直分割
+np.hsplit(arr, n)               # 水平分割
 ```
 
 ### 11.5 运算与广播
@@ -991,8 +1024,8 @@ df[['列1', '列2']]        # 多列 → DataFrame
 
 # 增删改
 df['新列'] = 表达式
-df.drop(columns=['列名'])
-df.rename(columns={'旧': '新'})  # 推荐赋值而非 inplace=True
+df = df.drop(columns=['列名'])
+df = df.rename(columns={'旧': '新'})  # 推荐赋值而非 inplace=True
 
 # 排序
 df.sort_values('列', ascending=False)
@@ -1007,7 +1040,7 @@ df[(df['年龄'] > 25) & (df['工资'] > 10000)]
 
 # 其他
 df[df['城市'].isin(['北京', '上海'])]
-df[df['姓名'].str.contains('三')]
+df[df['姓名'].str.contains('三', na=False)]
 df[df['年龄'].between(25, 30)]
 df.query('年龄 > 25 and 工资 > 10000')   # query 更简洁
 ```
@@ -1017,18 +1050,19 @@ df.query('年龄 > 25 and 工资 > 10000')   # query 更简洁
 ```python
 # 缺失值
 df.isnull().sum()                     # 检查（第一步）
-df.dropna(subset=['工资'])            # 删除
-df.fillna({'年龄': df['年龄'].mean()})  # 填充
-df.ffill() / df.bfill()               # 前后填充
+df = df.dropna(subset=['工资'])        # 删除
+df = df.fillna({'年龄': df['年龄'].mean()})  # 填充
+df = df.ffill()                       # 前向填充
+df = df.bfill()                       # 后向填充
 
 # 重复值
 df.duplicated().sum()
-df.drop_duplicates(subset=['姓名'])
+df = df.drop_duplicates(subset=['姓名'])
 
 # 类型转换
-df['列'].astype(int)
-pd.to_datetime(df['日期'])
-pd.to_numeric(s, errors='coerce')     # 安全转换
+df['列'] = df['列'].astype(int)
+df['日期'] = pd.to_datetime(df['日期'], errors='coerce')
+s = pd.to_numeric(s, errors='coerce')     # 安全转换
 ```
 
 ### 12.8 分组聚合（groupby）
@@ -1055,7 +1089,11 @@ pd.merge(left, right, on='key', how='left')  # SQL JOIN
 ### 12.10 时间序列
 
 ```python
-df['日期'].dt.year / .dt.month / .dt.day / .dt.dayofweek
+df['年份'] = df['日期'].dt.year
+df['月份'] = df['日期'].dt.month
+df['星期'] = df['日期'].dt.dayofweek
+pd.date_range('2024-01-01', periods=30, freq='D')
+df['日期'] + pd.Timedelta(days=7)
 df.set_index('日期').resample('ME').sum()  # 按月重采样
 # 频率：'D'日, 'W'周, 'ME'月末, 'QE'季度末, 'YE'年末
 ```
@@ -1103,10 +1141,10 @@ df.set_index('日期').resample('ME').sum()  # 按月重采样
 11. **`is` vs `==`** — is 比较身份，`==` 比较值；None 用 `is`
 12. **`append` vs `extend`** — 前者加整个对象，后者逐个追加
 13. **`groupby` 需先排序** — `itertools.groupby` 只合并连续相同键
-14. **子类 `__init__` 忘记 `super().__init__()`** — 父类属性未初始化
+14. **子类 `__init__` 忘记 `super().__init__()`** — 父类属性可能未初始化
 15. **`str.isidentifier()` 不是 C 标识符** — 接受大量 Unicode 字符
 16. **map 迭代器只能遍历一次** — 提前 `list()` 转换
-17. **reduce 空序列无初始值** — 抛 TypeError，始终提供第三个参数
+17. **reduce 空序列无初始值** — 抛 TypeError，序列可能为空时提供第三个参数
 18. **NumPy `*` 是逐元素乘** — 矩阵乘法用 `@` 或 `np.dot()`
 19. **Pandas `loc` 切片包含末尾** — `iloc` 不包含
 20. **CPU 密集用多线程无效** — GIL 限制，改用多进程
@@ -1145,7 +1183,7 @@ while True:
 | `math.comb(n, k)` | 组合数 | 2032 |
 | `pow(a, b, mod)` | 快速幂取模 | 2035 |
 | `int(s, base)` | 任意进制转整数 | 2057 |
-| `bin(n)[2:]` / `hex(n)[2:].upper()` | 转进制字符串 | 2051, 2057 |
+| `format(n, 'b')` / `format(n, 'X')` | 转进制字符串，可保留负号 | 2051, 2057 |
 | `divmod(a, b)` | 同时返回商和余数 | 2021, 2031, 2033 |
 | `sorted(lst, key=abs, reverse=True)` | 按绝对值排序 | 2020 |
 | `bisect.insort(lst, x)` | 有序插入 | 2019 |
