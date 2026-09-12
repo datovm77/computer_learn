@@ -6,3 +6,8 @@ output/
 .ipynb_checkpoints/
 *.npy
 *.npz
+*.csv
+*.xlsx
+*.parquet
+*.db
+*.sqlite
