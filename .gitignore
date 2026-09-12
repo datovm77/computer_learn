@@ -1,1 +1,8 @@
 PLAN/
+
+# Jupyter 运行输出与缓存
+output/
+**/output/
+.ipynb_checkpoints/
+*.npy
+*.npz
